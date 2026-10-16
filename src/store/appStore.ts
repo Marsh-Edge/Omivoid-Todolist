@@ -13,21 +13,23 @@ export interface AppFilters {
 export interface AppState {
   activeView: View;
   selectedProjectId: string | null;
+  /** Local search query (case-insensitive). */
   searchQuery: string;
+  /** Instant filter chips. */
   filters: AppFilters;
   sortBy: "dueAt" | "createdAt" | "updatedAt" | "order";
   sortDir: "asc" | "desc";
   groupBy: "none" | "project" | "date" | "tag";
   /** Ids of tasks whose subtask rows are expanded in the list. */
   expandedTaskIds: ReadonlySet<string>;
-  setActiveView: (view: View) => void;
-  setSelectedProjectId: (id: string | null) => void;
-  setSearchQuery: (q: string) => void;
-  setFilters: (f: AppFilters) => void;
+  setActiveView: (activeView: View) => void;
+  setSelectedProjectId: (selectedProjectId: string | null) => void;
+  setSearchQuery: (searchQuery: string) => void;
+  setFilters: (filters: AppFilters) => void;
   clearFilters: () => void;
-  setSortBy: (s: AppState["sortBy"]) => void;
-  setSortDir: (d: AppState["sortDir"]) => void;
-  setGroupBy: (g: AppState["groupBy"]) => void;
+  setSortBy: (sortBy: AppState["sortBy"]) => void;
+  setSortDir: (sortDir: AppState["sortDir"]) => void;
+  setGroupBy: (groupBy: AppState["groupBy"]) => void;
   toggleTaskExpanded: (id: string) => void;
   collapseAllTasks: () => void;
 }

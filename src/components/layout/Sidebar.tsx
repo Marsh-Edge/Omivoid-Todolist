@@ -113,6 +113,7 @@ export function Sidebar() {
             onClick={() => {
               setActiveView(id);
               setSelectedProjectId(null);
+              // Clear search when switching views (explicit behavior: filters persist unless cleared).
             }}
             className={cn(
               "hover:bg-accent focus-visible:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none",
