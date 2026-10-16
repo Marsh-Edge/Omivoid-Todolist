@@ -1,0 +1,244 @@
+"use client";
+
+import { type MouseEvent } from "react";
+import {
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Flag,
+  GripVertical,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  Trash,
+} from "lucide-react";
+import { cn } from "cn";
+import { Button } from "@/components/ui/button";
+import { t } from "@/lib/i18n";
+import { isOverdue, isToday } from "@/lib/viewPredicates";
+import { format } from "date-fns";
+import type { Tag, Task, TaskPriority, SmartView } from "@/types";
+
+const priorityColors: Record<Exclude<TaskPriority, "none">, string> = {
+  low: "text-blue-500",
+  medium: "text-amber-500",
+  high: "text-red-500",
+};
+
+export interface TaskRowProps {
+  task: Task;
+  depth: number;
+  view: SmartView;
+  hasChildren: boolean;
+  isExpanded: boolean;
+  tags: readonly Tag[];
+  /** null disables drag & drop (e.g. non-manual sort, trash view). */
+  dragHandleProps?: {
+    draggable: true;
+    onDragStart: (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+    isDragOver: boolean;
+  };
+  onToggleExpand: () => void;
+  onToggleComplete: () => void;
+  onEdit: () => void;
+  onAddSubtask: () => void;
+  onTrash: () => void;
+  onRestore: () => void;
+  onDeleteForever: () => void;
+}
+
+export function TaskRow({
+  task,
+  depth,
+  view,
+  hasChildren,
+  isExpanded,
+  tags,
+  dragHandleProps,
+  onToggleExpand,
+  onToggleComplete,
+  onEdit,
+  onAddSubtask,
+  onTrash,
+  onRestore,
+  onDeleteForever,
+}: TaskRowProps) {
+  const isDone = task.status === "done";
+  const isTrashView = view === "trash";
+  const showDue = task.dueAt > 0 && !isDone && !isTrashView;
+  // Snapshot timestamp for due-state rendering; safe (no re-render loop).
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+  const dueOverdue = showDue && isOverdue(task.dueAt, nowMs);
+  const dueToday = showDue && isToday(task.dueAt, nowMs);
+  const priority = task.priority !== "none" ? priorityColors[task.priority] : null;
+
+  function handleTitleClick(e: MouseEvent<HTMLSpanElement>) {
+    e.stopPropagation();
+    onEdit();
+  }
+
+  return (
+    <div
+      className={cn(
+        "group flex h-11 items-center gap-2 rounded-lg px-2 transition-colors hover:bg-muted/60",
+        dragHandleProps?.isDragOver && "bg-accent ring-1 ring-ring",
+        depth > 0 && "text-[0.925em]",
+      )}
+      style={depth > 0 ? { paddingLeft: `${0.5 + depth * 1.25}rem` } : undefined}
+      {...(dragHandleProps
+        ? {
+            draggable: true,
+            onDragStart: dragHandleProps.onDragStart,
+            onDragOver: dragHandleProps.onDragOver,
+            onDrop: dragHandleProps.onDrop,
+            onDragEnd: dragHandleProps.onDragEnd,
+          }
+        : {})}
+    >
+      {dragHandleProps ? (
+        <span
+          className="cursor-grab text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          aria-hidden="true"
+        >
+          <GripVertical className="size-3.5" />
+        </span>
+      ) : null}
+
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+          aria-label={
+            isExpanded
+              ? t("collapseSubtasks", { title: task.title })
+              : t("expandSubtasks", { title: task.title })
+          }
+          className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ChevronRight
+            className={cn("size-3.5 transition-transform", isExpanded && "rotate-90")}
+            aria-hidden="true"
+          />
+        </button>
+      ) : (
+        <span className="size-5 shrink-0" aria-hidden="true" />
+      )}
+
+      {!isTrashView ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isDone}
+          onClick={onToggleComplete}
+          aria-label={
+            isDone ? t("markIncomplete", { title: task.title }) : t("markComplete", { title: task.title })
+          }
+          className={cn(
+            "flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isDone && "bg-primary border-primary text-primary-foreground",
+          )}
+        >
+          {isDone ? <Check className="size-3" aria-hidden="true" /> : null}
+        </button>
+      ) : null}
+
+      <span
+        onClick={handleTitleClick}
+        className={cn(
+          "min-w-0 flex-1 cursor-pointer truncate text-sm",
+          isDone && "text-muted-foreground line-through",
+        )}
+      >
+        {task.title}
+      </span>
+
+      {priority ? <Flag className={cn("size-3 shrink-0", priority)} aria-hidden="true" /> : null}
+
+      {showDue ? (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1 text-xs tabular-nums",
+            dueOverdue ? "text-red-500" : dueToday ? "text-amber-500" : "text-muted-foreground",
+          )}
+        >
+          <CalendarDays className="size-3" aria-hidden="true" />
+          {format(task.dueAt, "MMM d")}
+        </span>
+      ) : null}
+
+      {tags.length > 0 ? (
+        <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
+          {tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag.id}
+              className="size-1.5 rounded-full"
+              style={{ backgroundColor: tag.color || "var(--muted-foreground)" }}
+            />
+          ))}
+          {tags.length > 3 ? <span className="text-muted-foreground text-xs">+{tags.length - 3}</span> : null}
+        </span>
+      ) : null}
+
+      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {isTrashView ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onRestore}
+              aria-label={t("restoreTask", { title: task.title })}
+            >
+              <RotateCcw aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onDeleteForever}
+              aria-label={t("deleteForever", { title: task.title })}
+            >
+              <Trash aria-hidden="true" />
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onEdit}
+              aria-label={t("editTask", { title: task.title })}
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onAddSubtask}
+              aria-label={t("addSubtask", { title: task.title })}
+            >
+              <Plus aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onTrash}
+              aria-label={t("deleteTask", { title: task.title })}
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}

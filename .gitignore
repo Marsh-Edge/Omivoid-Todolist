@@ -17,6 +17,10 @@
 /.next/
 /out/
 
+# electron
+/electron/out/
+/release/
+
 # production
 /build
 
