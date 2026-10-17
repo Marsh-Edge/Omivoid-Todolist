@@ -10,6 +10,11 @@ export interface OmivoidBridge {
     readonly chrome: string;
     readonly node: string;
   };
+  /**
+   * Subscribes to the global quick-add shortcut (`Ctrl/Cmd+Alt+N`).
+   * Returns an unsubscribe function.
+   */
+  readonly onQuickAdd: (listener: () => void) => () => void;
 }
 
 declare global {

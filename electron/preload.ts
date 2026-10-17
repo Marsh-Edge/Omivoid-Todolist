@@ -1,4 +1,4 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
 /**
  * Minimal, sandbox-safe preload. Nothing else is exposed to the renderer:
@@ -6,12 +6,27 @@ import { contextBridge } from "electron";
  * Additional capabilities (e.g. desktop notifications) are added here
  * explicitly, with the narrowest possible surface.
  */
+
+/** Must match the channel name in `main.ts`. */
+const QUICK_ADD_CHANNEL = "omivoid:quick-add";
+
 const omivoidBridge = {
   platform: process.platform,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
     node: process.versions.node,
+  },
+  /**
+   * Subscribes to the global quick-add shortcut (`Ctrl/Cmd+Alt+N`).
+   * Returns an unsubscribe function.
+   */
+  onQuickAdd: (listener: () => void): (() => void) => {
+    const handler = (): void => listener();
+    ipcRenderer.on(QUICK_ADD_CHANNEL, handler);
+    return () => {
+      ipcRenderer.removeListener(QUICK_ADD_CHANNEL, handler);
+    };
   },
 } as const;
 

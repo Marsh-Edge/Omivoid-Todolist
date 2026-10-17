@@ -11,6 +11,7 @@ directories:
 files:
   - out/**/*
   - electron/out/**/*
+  - electron/assets/**/*
   - package.json
 
 asar: true

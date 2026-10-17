@@ -28,8 +28,9 @@ Ships as a web static export and as a desktop app (Electron).
 - Dark / light / system theme
 - Export / import all data as a JSON backup
 - Virtualized lists and board columns for large datasets
+- Desktop extras: **system tray** (closing the window keeps the app running), **global quick-add** (`Ctrl/Cmd+Alt+N`), window size/position memory, and a single-instance lock
 
-See `PLAN.md` for phase status (Phases 0–3 done; Phase 4 Groups 1–6 done).
+See `PLAN.md` for phase status (Phases 0–4 done; Phase 5 not started).
 
 ## Requirements
 
@@ -71,3 +72,7 @@ npm run electron:build     # next build -> tsc -> electron-builder --win
 it; use `npm run dev` for fast web iteration. In production the renderer is
 served from `http://127.0.0.1:41739` (a fixed loopback origin) so IndexedDB
 persistence survives restarts.
+
+Closing the window hides Omivoid to the system tray rather than quitting; use
+the tray menu's **Quit Omivoid** (or the app menu) to exit. `Ctrl/Cmd+Alt+N`
+focuses the quick-add box from anywhere.

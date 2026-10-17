@@ -7,6 +7,12 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 > the features were only scaffolds or missing entirely (the "Phase 4 complete" commit
 > changed no files). This revision corrects the record, makes Phase 3 genuinely
 > functional, and re-scopes Phases 4–5 as *not started*.
+>
+> **Follow-up (2026-10-17, Group 7).** The delivered Phase 3–4 work was committed and
+> audited: the working tree had **emptied `src/app/globals.css`** (the Tailwind v4
+> import + theme tokens), leaving the web build unstyled — restored from `HEAD`, CSS is
+> back to ~56 KB. The generated `scripts/*.cjs` perf-seed bundle is now excluded from
+> ESLint. Group 7 (desktop extras) is implemented and verified below.
 
 ## Phase status
 
@@ -14,7 +20,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 1** — Foundation + Electron proof (no real features)
 - [x] **Phase 2** — Tier 1 core: tasks, subtasks, projects, tags, smart views
 - [x] **Phase 3** — Tier 1 rest: search, filters, group-by, command palette, shortcuts, import/export, dark/light mode
-- [ ] **Phase 4** — Tier 2 features, in small groups (STOP after each group) — **in progress (Groups 1–6 done)**
+- [x] **Phase 4** — Tier 2 features, in small groups (Groups 1–7 done)
 - [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests — **not started**
 
 ## Phase 1 — Foundation + Electron proof
@@ -59,7 +65,7 @@ Scripts: `dev` (web HMR), `build`, `lint`, `test`, `electron:compile`, `electron
 - **Dark / light / system theme** with a header toggle (persisted in `localStorage`)
 - Lightweight toast system (`src/store/toastStore.ts`, `src/components/ui/toaster.tsx`)
 
-## Phase 4 — Tier 2 (small groups, STOP after each group) — IN PROGRESS
+## Phase 4 — Tier 2 (small groups, STOP after each group) — DONE
 
 - [x] **Group 1** — Markdown notes per task (lazy-loaded, live preview) + wiki-style `[[links]]` with backlinks panel
 - [x] **Group 2** — Kanban board + Calendar views (lazy-loaded)
@@ -67,7 +73,7 @@ Scripts: `dev` (web HMR), `build`, `lint`, `test`, `electron:compile`, `electron
 - [x] **Group 4** — Recurring tasks (tested) + Electron desktop notifications
 - [x] **Group 5** — Undo/redo + rolling local backups (tested)
 - [x] **Group 6** — Statistics page with lightweight charts (lazy-loaded, tested)
-- [ ] **Group 7** — Desktop extras: tray, global quick-add shortcut, window size/position memory, single-instance lock
+- [x] **Group 7** — Desktop extras: tray, global quick-add shortcut, window size/position memory, single-instance lock
 
 ### Group 1 — delivered
 
@@ -198,6 +204,41 @@ the list/board/calendar); `nowMs` is captured at mount, so overdue/due-today ref
 re-navigation rather than at midnight; the trend window (30 days) and project limit (6) are constants,
 not user-adjustable.
 
+### Group 7 — delivered
+
+All four items live in the Electron shell (`electron/main.ts`, `electron/windowState.ts`) — **no new
+renderer bundle weight** (the only renderer change is a ~0.3 KB IPC hook) and **no new dependencies**.
+
+- **Single-instance lock** — `app.requestSingleInstanceLock()`; a second launch quits immediately and
+  the first instance reveals its existing window (`second-instance` handler). This also prevents two
+  processes from colliding over the fixed loopback port.
+- **Window size/position memory** — `electron/windowState.ts` persists `{ x, y, width, height,
+  maximized }` to `window-state.json` in the app's userData folder. It saves debounced (400 ms) on
+  `move`/`resize`/`maximize`/`unmaximize` and flushes on `close`; `getNormalBounds()` stores the
+  restored bounds so un-maximizing stays sensible. On load, a size below the minimum or a position
+  that no longer overlaps any connected display is discarded (the window centers instead). No
+  dependency, no network.
+- **System tray** — `Tray` with a locally drawn 32×32 icon (`electron/assets/tray.png`, generated from
+  a rounded indigo square + check; added to `electron-builder.yml` `files`). Context menu: **Show
+  Omivoid** / **Quit Omivoid**; clicking the icon shows the window. **Closing the window hides it to
+  the tray** instead of quitting (`close` → `preventDefault` + `hide` unless `isQuitting`), so the app
+  keeps running until an explicit quit.
+- **Global quick-add shortcut** — `CommandOrControl+Alt+N` registered with `globalShortcut`; it
+  reveals/focuses the window and sends the `omivoid:quick-add` IPC channel. The preload exposes a
+  single narrow subscription (`onQuickAdd`, returning an unsubscribe fn) and the renderer hook
+  `src/hooks/useDesktopBridge.ts` (mounted in `MainLayout`) focuses `#quick-add-input`. A no-op in the
+  browser (`window.omivoid` is absent).
+
+Verified by a desktop smoke run (Windows): the window opens and restores exact saved bounds
+(`120,120,1000,680`); WM_CLOSE hides it while the process stays alive (tray); an injected
+`Ctrl+Alt+N` reveals it again; a second launch exits while the first stays up.
+
+Known limitations (deferred): the tray icon is a single 32×32 PNG (no macOS template image or multi-DPI
+set yet — fine for Windows/Linux); quick-add focus is best-effort (if the active view doesn't render
+`#quick-add-input`, the window is still revealed); on Linux the tray needs a desktop environment with
+AppIndicator support; window placement is validated against display *overlap* only (not full
+containment).
+
 ## Phase 5 — Tier 3 + polish (only if performance budget allows) — NOT STARTED
 
 - Graph view, Pomodoro timer, timeline-lite, saved filters, Markdown export (each optional)
@@ -211,7 +252,7 @@ not user-adjustable.
 - Lazy-load: Markdown editor, graph, charts, calendar, command palette
 - Every common query must hit an IndexedDB index
 
-### Latest measurement (end of Phase 4 Group 6)
+### Latest measurement (end of Phase 4 Group 7)
 
 | Milestone | Initial JS | Lazy JS | CSS |
 | --- | --- | --- | --- |
@@ -222,7 +263,13 @@ not user-adjustable.
 | End of Phase 4 Group 3 | 969 KB | +9 KB (board + calendar) | 56 KB |
 | End of Phase 4 Group 4 | 975 KB | +9 KB (board + calendar) | 56 KB |
 | End of Phase 4 Group 5 | 986 KB | +9 KB (board + calendar) | 56 KB |
-| End of Phase 4 Group 6 | **997 KB** | + board + calendar + **stats route** | **58 KB** |
+| End of Phase 4 Group 6 | 997 KB | + board + calendar + stats route (171 KB) | 58 KB |
+| **End of Phase 4 Group 7** | **997 KB** | +171 KB | **56 KB** |
+
+Group 7 is an Electron-shell group: it adds roughly 0.3 KB to the renderer (the `useDesktopBridge`
+IPC hook) and everything else runs in the main process, so the web bundle is unchanged. (Measured
+initial JS = 997 KB; CSS = 56 KB. The Group 6 row's 58 KB was an earlier reading; the restored
+`globals.css` compiles to 56 KB.)
 
 Group 3 adds the parser and the live preview chips to the initial bundle (+6 KB) — it must be
 available the moment the quick-add field renders, so it isn't lazy. Group 4 adds the recurrence
@@ -282,3 +329,9 @@ to the *already index-narrowed* view result, so the candidate set is bounded by 
 | Charts hand-rolled with SVG/Tailwind (no library) | Honors the minimal-dependency + local-only rules; fully theme-aware and small |
 | Stats aggregate in JS from the existing `[deletedAt+order]` read | Avoids a new `completedAt` index/migration; same cost class as the list/board/calendar |
 | Chart values always printed next to bars | Keeps the dashboard readable without relying on color/height alone (accessibility) |
+| Window state persisted to `window-state.json` in userData (not `localStorage`/IndexedDB) | The main process owns window geometry before any renderer exists; a tiny JSON file needs no dependency and avoids coupling the shell to the renderer store |
+| Off-screen/too-small window state discarded on load | Prevents an unreachable window after a monitor is disconnected; falls back to Electron centering |
+| Store `getNormalBounds()` + a maximized flag | Un-maximizing later returns to the user's pre-maximize size instead of the full-screen bounds |
+| Close hides to tray (`preventDefault` unless `isQuitting`) | The expected desktop behavior for a tray app; the tray menu's Quit is the explicit exit path |
+| Global quick-add via `globalShortcut` + one IPC channel | `Ctrl/Cmd+Alt+N` works from any app; the preload exposes only a narrow `onQuickAdd` subscription so the bridge stays minimal |
+| Tray icon drawn locally (32×32 PNG, no generator/asset pipeline) | Honors the local-only + minimal-dependency rules; one committed PNG is enough for Windows/Linux |

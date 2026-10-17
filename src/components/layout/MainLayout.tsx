@@ -10,6 +10,7 @@ import { SnapshotDialog } from "@/features/backups/components/SnapshotDialog";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Toaster } from "@/components/ui/toaster";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
+import { useDesktopBridge } from "@/hooks/useDesktopBridge";
 import useAppStore from "@/store/appStore";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     [paletteOpen, setPaletteOpen],
   );
   useGlobalShortcuts(togglePalette);
+  useDesktopBridge();
   useDueNotifications();
   useAutoSnapshots();
 

@@ -1,7 +1,16 @@
-import { app, BrowserWindow, nativeTheme } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  globalShortcut,
+  nativeImage,
+  nativeTheme,
+} from "electron";
 import { createReadStream, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
+import { loadWindowState, trackWindowState } from "./windowState";
 
 /**
  * Omivoid desktop shell.
@@ -11,6 +20,9 @@ import path from "node:path";
  *   `file://`.
  * - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
  * - External navigation and popups are denied.
+ * - Desktop extras: system tray (closing the window keeps the app running),
+ *   a global quick-add shortcut, window size/position memory, and a
+ *   single-instance lock.
  */
 
 const isDev = !app.isPackaged;
@@ -25,6 +37,12 @@ const DEV_URL = process.env.OMIVOID_DEV_URL;
  */
 const RENDERER_PORT = 41739;
 const RENDERER_ORIGIN = `http://127.0.0.1:${RENDERER_PORT}`;
+
+/** Renderer channel used by the global quick-add shortcut (see `preload.ts`). */
+const QUICK_ADD_CHANNEL = "omivoid:quick-add";
+
+/** Global accelerator that reveals the window and focuses the quick-add box. */
+const QUICK_ADD_ACCELERATOR = "CommandOrControl+Alt+N";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -131,11 +149,17 @@ async function startStaticServer(rootDir: string): Promise<StaticServer> {
 }
 
 let staticServer: StaticServer | null = null;
+let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 
 async function createWindow(): Promise<BrowserWindow> {
+  const saved = loadWindowState();
+
   const window = new BrowserWindow({
-    width: 1100,
-    height: 760,
+    width: saved.width,
+    height: saved.height,
+    ...(saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}),
     minWidth: 680,
     minHeight: 480,
     show: false,
@@ -150,7 +174,18 @@ async function createWindow(): Promise<BrowserWindow> {
     },
   });
 
+  trackWindowState(window);
+  if (saved.maximized) window.maximize();
+
   window.once("ready-to-show", () => window.show());
+
+  // Closing the window hides it to the tray instead of quitting; a real quit
+  // (tray menu, platform quit) sets `isQuitting` and lets the close through.
+  window.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    window.hide();
+  });
 
   let rendererOrigin = DEV_URL;
   if (!rendererOrigin) {
@@ -171,27 +206,64 @@ async function createWindow(): Promise<BrowserWindow> {
   return window;
 }
 
-app.on("will-quit", () => {
-  void staticServer?.close().catch((error) => {
-    console.error("[omivoid] failed to stop the local static server", error);
-  });
-});
+/** Shows and focuses the main window (restoring it first if minimized). */
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
-app.whenReady().then(() => {
-  // Fail loudly (in the console) on renderer security misconfiguration.
-  if (isDev) {
-    console.log(`[omivoid] ${app.getName()} ready — local-only renderer.`);
+function createTray(): void {
+  const iconPath = path.join(__dirname, "..", "assets", "tray.png");
+  const icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    console.error("[omivoid] tray icon not found, skipping tray:", iconPath);
+    return;
   }
 
-  void createWindow().catch((error) => {
-    console.error("[omivoid] failed to open the window", error);
-    app.quit();
-  });
+  tray = new Tray(icon);
+  tray.setToolTip("Omivoid");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Show Omivoid", click: () => showMainWindow() },
+      { type: "separator" },
+      {
+        label: "Quit Omivoid",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on("click", () => showMainWindow());
+}
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      void createWindow();
-    }
+function registerGlobalShortcuts(): void {
+  const registered = globalShortcut.register(QUICK_ADD_ACCELERATOR, () => {
+    showMainWindow();
+    mainWindow?.webContents.send(QUICK_ADD_CHANNEL);
+  });
+  if (!registered) {
+    console.error("[omivoid] could not register the global quick-add shortcut");
+    return;
+  }
+  if (isDev) {
+    console.log(`[omivoid] global quick-add shortcut registered (${QUICK_ADD_ACCELERATOR}).`);
+  }
+}
+
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  tray?.destroy();
+  tray = null;
+  void staticServer?.close().catch((error) => {
+    console.error("[omivoid] failed to stop the local static server", error);
   });
 });
 
@@ -200,3 +272,38 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+// A second launch reveals the existing instance instead of opening another
+// window (or, in production, colliding with it over the loopback port).
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => showMainWindow());
+
+  app.whenReady().then(() => {
+    if (isDev) {
+      console.log(`[omivoid] ${app.getName()} ready — local-only renderer.`);
+    }
+
+    void createWindow()
+      .then((window) => {
+        mainWindow = window;
+        createTray();
+        registerGlobalShortcuts();
+      })
+      .catch((error) => {
+        console.error("[omivoid] failed to open the window", error);
+        app.quit();
+      });
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        void createWindow().then((window) => {
+          mainWindow = window;
+        });
+      } else {
+        showMainWindow();
+      }
+    });
+  });
+}
