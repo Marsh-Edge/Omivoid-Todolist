@@ -9,8 +9,8 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 1** — Foundation + Electron proof (no real features)
 - [x] **Phase 2** — Tier 1 core: tasks, subtasks, projects, tags, smart views
 - [x] **Phase 3** — Tier 1 rest: search, filters, command palette, shortcuts, import/export, dark/light mode
-- [ ] **Phase 4** — Tier 2 features, in small groups (STOP after each group)
-- [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests
+- [x] **Phase 4** — Tier 2 features, in small groups (STOP after each group)
+- [x] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests
 
 ## Phase 1 — Foundation + Electron proof
 
