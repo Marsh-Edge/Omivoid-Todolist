@@ -14,7 +14,7 @@ Ships as a web static export and as a desktop app (Electron).
 
 ## Features
 
-- Tasks with subtasks, priority, status, due date/time, tags (colors), projects (nesting)
+- Tasks with subtasks, priority, status, due date/time, tags (colors), projects (nesting, icons + colors)
 - Smart views: Inbox, Today, Upcoming, Overdue, Completed, Important, Trash (restore)
 - List, **Kanban board** and **month calendar** view modes (lazy-loaded)
 - **Markdown notes** per task with `[[wiki links]]` and a backlinks panel
@@ -30,7 +30,7 @@ Ships as a web static export and as a desktop app (Electron).
 - Virtualized lists and board columns for large datasets
 - Desktop extras: **system tray** (closing the window keeps the app running), **global quick-add** (`Ctrl/Cmd+Alt+N`), window size/position memory, and a single-instance lock
 
-See `PLAN.md` for phase status (Phases 0–4 done; Phase 5 not started).
+See `PLAN.md` for phase status (Phases 0–4 done; Phase 5 in progress — Step 0 gap fixes + Step 1 performance audit done).
 
 ## Requirements
 
@@ -59,6 +59,20 @@ npm run lint
 ```bash
 npm run build      # emits ./out
 ```
+
+## Sample data (seed)
+
+Generate a synthetic data set without typing anything:
+
+```bash
+npm run seed                 # 100 tasks (default)
+npm run seed -- --count 1000 # custom size
+```
+
+This writes `omivoid-seed.json` (a valid Omivoid backup) in the project root.
+Import it in the app via the command palette (`Ctrl/Cmd+K` → **Import data
+(JSON)**); importing replaces all current data. `omivoid-seed.json` is
+gitignored.
 
 ## Desktop (Electron)
 

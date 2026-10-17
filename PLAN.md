@@ -11,8 +11,9 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 > **Follow-up (2026-10-17, Group 7).** The delivered Phase 3–4 work was committed and
 > audited: the working tree had **emptied `src/app/globals.css`** (the Tailwind v4
 > import + theme tokens), leaving the web build unstyled — restored from `HEAD`, CSS is
-> back to ~56 KB. The generated `scripts/*.cjs` perf-seed bundle is now excluded from
-> ESLint. Group 7 (desktop extras) is implemented and verified below.
+> back to ~56 KB. The generated `scripts/*.cjs` perf-seed bundle was excluded from
+> ESLint at the time (that ignore and the broken seed bundle were later removed in
+> Phase 5 Step 0 — see below). Group 7 (desktop extras) is implemented and verified below.
 
 ## Phase status
 
@@ -21,7 +22,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 2** — Tier 1 core: tasks, subtasks, projects, tags, smart views
 - [x] **Phase 3** — Tier 1 rest: search, filters, group-by, command palette, shortcuts, import/export, dark/light mode
 - [x] **Phase 4** — Tier 2 features, in small groups (Groups 1–7 done)
-- [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests — **not started**
+- [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests — **in progress (Step 0 gap fixes + Step 1 perf audit done)**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -239,11 +240,119 @@ set yet — fine for Windows/Linux); quick-add focus is best-effort (if the acti
 AppIndicator support; window placement is validated against display *overlap* only (not full
 containment).
 
-## Phase 5 — Tier 3 + polish (only if performance budget allows) — NOT STARTED
+## Phase 5 — Tier 3 + polish (only if performance budget allows) — IN PROGRESS
 
 - Graph view, Pomodoro timer, timeline-lite, saved filters, Markdown export (each optional)
 - Animations (CSS first), accessibility pass, performance audit at 10,000 tasks
 - Full test suite; final README (Windows + Linux setup/build/packaging)
+
+### Step 0 — gap fixes (done)
+
+Four small gaps left over from earlier phases, fixed before starting Tier 3 work.
+
+1. **Seed tool replaced.** The three `scripts/seed-10k.*` files were broken (`title: Task` — a bare
+   type used as a value — and unusable anyway: Node has no IndexedDB, so they could never write to
+   Dexie). Replaced with **`scripts/seed.mjs`** (`npm run seed`, default **100** tasks, `--count N`,
+   `--out file`). It generates a synthetic data set and writes it as a **valid Omivoid backup file**
+   (`{ version: 1, exportedAt, tasks, projects, tags }`) into `omivoid-seed.json` (gitignored). The
+   user imports it through the app's existing **Ctrl/Cmd+K → “Import data (JSON)”** path, so the data
+   flows through the *same* Zod-validated `parseBackupText` gate as any real backup — no schema drift
+   possible. Generates 6 projects (with icons + colors), 8 tags, priorities/statuses/due dates/
+   recurrences/subtasks/trash spread across the tasks. Output was verified against `backupSchema`
+   (200-task run parsed cleanly) with a throwaway test that was then removed (it depended on a
+   gitignored file).
+2. **Removed unused `@dnd-kit/*`.** `@dnd-kit/core`, `@dnd-kit/sortable` and `@dnd-kit/utilities`
+   were dependencies but never imported (the board uses native HTML5 drag & drop). They were blocked
+   by a pre-existing peer conflict: `@vitest/ui@^5.0.5` peers `vitest@5`, while the project pins
+   `vitest@^3.2.4`. Fixed by pinning **`@vitest/ui` to `3.2.4`** (matching `vitest`/`@vitest/coverage-v8`),
+   then `npm install` removed the three packages (23 added / 5 removed in the prune).
+3. **Project/tag color + icon UI.** Previously there was no way to set a tag color or a project
+   icon/color after creation. Added:
+   - `src/lib/colors.ts` (`PRESET_COLORS`, 10 shared swatches) + `src/components/ui/color-swatches.tsx`
+     (accessible preset picker with a “default/no color” option).
+   - `src/lib/projectIcons.ts` — a **curated 12-icon allowlist** (`PROJECT_ICON_MAP` + `projectIcon()`)
+     so icons stay tree-shakeable (no wildcard `lucide-react` import).
+   - `src/features/projects/components/ProjectEditDialog.tsx` (name + icon + color) and
+     `src/features/tags/components/TagEditDialog.tsx` (name + color), opened by a new **pencil** button
+     on each sidebar row. The sidebar now renders a project's chosen **icon** (tinted by its color) or
+     falls back to the color dot. Create forms stay name-only (progressive disclosure). New i18n keys
+     (`editProject`, `editProjectAria`, `editTag`, `editTagAria`, `nameLabel`, `colorLabel`,
+     `colorDefault`, `iconLabel`, `iconNone`).
+4. **Packaging icon + a packaging bug fixed.** Added **`build/icon.png`** (512×512, rounded-square +
+   check, drawn locally with System.Drawing) — electron-builder auto-detects `buildResources: build`.
+   The `/build` line was removed from `.gitignore` so the icon is committed. While validating with
+   `electron-builder --dir`, the packaged **`app.asar` was 312 MB**: the `files` whitelist was not
+   excluding runtime `node_modules` (all of React/Next/Radix/Markdown), even though the shell needs
+   none of it. Added **`!**/node_modules/**/*`** → **`app.asar` is now 1.42 MB** and there is no
+   `app.asar.unpacked` (the stray unpacked `esbuild.exe` is gone). Total `win-unpacked` (~370 MB) is
+   now just the Electron runtime.
+
+Verification: `npm run build` ✓ (static export), `npm run lint` ✓ (0 errors, the same 2 pre-existing
+`react-hooks/incompatible-library` warnings on `useVirtualizer`), `npm test` ✓ (128 tests / 16 files),
+`npm run electron:compile` ✓, `electron-builder --dir` ✓ (exe icon applied, asar 1.42 MB). Initial JS
+grew ~10 KB (1,007 KB) and CSS ~1 KB (57 KB) — the new dialogs plus the 12-icon set, which must be in
+the initial bundle to render project icons in the sidebar.
+
+### Step 1 — performance audit @ 10,000 tasks (findings)
+
+Method: generated a 10,000-task data set (`npm run seed -- --count 10000`), loaded it through
+fake-indexeddb in a throwaway Vitest harness, and timed the real query/render path. Numbers below are
+fake-indexeddb (pure JS + structured clone), so they are a **conservative upper bound** — native
+IndexedDB in Chromium is faster. Relative differences within the same harness are what matter.
+
+**Three correctness bugs found and fixed** (all untested — there was no `queryTasksForView` test):
+
+1. **Inbox / Completed / Important / project views returned *nothing*.** They used
+   `between([key, NONE], [key, NONE])`, but Dexie's `between` **excludes the upper bound by default**,
+   so an identical lower/upper pair compiles to an *empty* range (measured: 0 rows where 2,607 / 1,939 /
+   2,500 rows were expected). Replaced with `.equals([key, NONE])` (the obviously-intended lookup).
+   Fix: `src/db/taskQueries.ts`.
+2. **Project scope still excluded every task of that project.** It applied `matchesView(task, "inbox")`,
+   whose `isInbox` predicate demands `projectId === ""`. A project view now filters to
+   *active (non-done) tasks* instead, which matches every other view's "hide done" behaviour.
+3. **Trash's compound bound** `between([NONE+1, Dexie.minKey], [Dexie.maxKey, Dexie.maxKey])` threw
+   `DataError` under fake-indexeddb (a `Dexie.maxKey` *first* component). Rewritten as
+   `.above([NONE, Dexie.maxKey])` — same result, and it is now testable.
+
+**One performance fix (the hot path):**
+
+- `queryParentIdsWithChildren()` — a live query on the **main list**, re-run on every task mutation —
+  used `where("parentId").notEqual("")`, which forces Dexie into a full-collection filter: **>20 s
+  (timeout) → 7.4 s** even after dropping `notEqual`. A chained Dexie `.filter()` on the range read was
+  equally pathological. Now it reads the `parentId` index range with `.above("")` and filters the
+  ~1,111 rows in JS: **7,400 ms → 14 ms** (~510×). A full mutation cycle (toggle done + two reads)
+  went from **>7.7 s → 312 ms**.
+
+| Operation @ 10k tasks | Before | After |
+| --- | --- | --- |
+| `queryParentIdsWithChildren()` | >20 000 ms | **14 ms** |
+| mutation cycle (toggle + view + parents) | >7 700 ms | **312 ms** |
+| Inbox / Completed / Important / project views | 0 rows (broken) | correct rows |
+
+Measured pipeline costs (10k tasks, after fixes) for context: view query 6–32 ms depending on the
+view's row count; `listActiveTasks()` 92 ms for 9,696 active rows; pure transforms (sort 0.4 ms,
+search/filter 1.0 ms, grouping 0.6–3.2 ms) are negligible because they run over the
+already-index-narrowed set. Import (`bulkAdd` of 10k rows) is ~530 ms — a one-time cost.
+
+**Remaining recommendations (not implemented — do these only if a profiling pass agrees):**
+
+- `listActiveTasks()` loads all ~9,696 active rows and re-runs as a live query in **Stats**
+  (`useStats`) and **note backlink resolution** (`useTaskNoteReferences`). That is fine while those
+  screens are open (stats genuinely needs every task), but worth caching or narrowing if a profiling
+  pass shows jank while editing notes.
+- View queries return full `Task` objects; the list only needs a subset of columns for rows that are
+  off-screen. IndexedDB cannot project columns, so this is bounded by the virtualizer, not by the DB.
+- The due-date views (`today`/`upcoming`/`overdue`) range on `dueAt` only, so they read done and
+  trashed rows too and let `matchesView` drop them. Cheap enough at 10k (6–17 ms), but a
+  `[dueAt+deletedAt]` index would trim the read if profiling ever flags it.
+- `useActiveTasks` in `src/features/tasks/useTasks.ts` is **dead code** (no consumers); remove it.
+
+Temp harness files and the generated `omivoid-seed.json` were deleted; only the
+`src/db/test/taskQueries.test.ts` regression suite was kept.
+
+Verification after Step 1: `npm run build` ✓ (static export), `npm run lint` ✓ (0 errors, the same 2
+pre-existing `useVirtualizer` warnings), `npm test` ✓ (**135 tests / 17 files**, +7 new). Bundle
+unchanged (1,007 KB JS / 57 KB CSS) — the fixes touch the DB layer only.
 
 ## Performance budget (checked at the end of every phase)
 
@@ -265,6 +374,7 @@ containment).
 | End of Phase 4 Group 5 | 986 KB | +9 KB (board + calendar) | 56 KB |
 | End of Phase 4 Group 6 | 997 KB | + board + calendar + stats route (171 KB) | 58 KB |
 | **End of Phase 4 Group 7** | **997 KB** | +171 KB | **56 KB** |
+| **Phase 5 Step 0 (gap fixes)** | **1,007 KB** | +171 KB | **57 KB** |
 
 Group 7 is an Electron-shell group: it adds roughly 0.3 KB to the renderer (the `useDesktopBridge`
 IPC hook) and everything else runs in the main process, so the web bundle is unchanged. (Measured
@@ -335,3 +445,9 @@ to the *already index-narrowed* view result, so the candidate set is bounded by 
 | Close hides to tray (`preventDefault` unless `isQuitting`) | The expected desktop behavior for a tray app; the tray menu's Quit is the explicit exit path |
 | Global quick-add via `globalShortcut` + one IPC channel | `Ctrl/Cmd+Alt+N` works from any app; the preload exposes only a narrow `onQuickAdd` subscription so the bridge stays minimal |
 | Tray icon drawn locally (32×32 PNG, no generator/asset pipeline) | Honors the local-only + minimal-dependency rules; one committed PNG is enough for Windows/Linux |
+| Seed tool emits a **backup JSON** instead of writing IndexedDB | Node has no IndexedDB, and a generated backup flows through the app's existing Zod-validated import — one schema, no drift, works in both web and Electron |
+| `@vitest/ui` pinned to `3.2.4` (not `^`) | `@vitest/ui@3.2.x` pins `vitest` to an exact peer; an exact pin avoids the ERESOLVE that also blocked removing the unused `@dnd-kit` packages |
+| Project icons limited to a curated 12-icon allowlist | Keeps `lucide-react` tree-shakeable; a wildcard import would pull the whole set into the bundle |
+| Color/icon editing lives in edit dialogs, not the create forms | Progressive disclosure (sidebar stays uncluttered); the sidebar row already provides the pencil affordance |
+| Packaging excludes `node_modules` (`!**/node_modules/**/*`) | The Electron shell uses only built-ins and serves static files, so runtime deps are dead weight — this shrank `app.asar` from 312 MB to 1.42 MB |
+| `build/icon.png` un-ignored from `/build` | electron-builder auto-detects `buildResources: build`; the icon must be committed for reproducible packaging |

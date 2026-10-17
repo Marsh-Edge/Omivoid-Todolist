@@ -37,35 +37,38 @@ export async function queryTasksForView(
   let tasks: Task[];
 
   if (view === "trash") {
+    // `deletedAt > NONE` (a real timestamp). `.above([NONE, Dexie.maxKey])`
+    // excludes every non-deleted row without relying on a compound
+    // `Dexie.maxKey` lower bound, which fake-indexeddb rejects.
     tasks = await db.tasks
       .where("[deletedAt+order]")
-      .between([NONE + 1, Dexie.minKey], [Dexie.maxKey, Dexie.maxKey])
+      .above([NONE, Dexie.maxKey])
       .toArray();
   } else if (opts.projectId) {
-    // Project scope: active (non-trashed) tasks in that project, any status
-    // (matchesView below narrows status).
+    // Project scope: active (non-trashed) tasks in that project; done is
+    // hidden below, the same way every other view hides it.
     tasks = await db.tasks
       .where("[projectId+deletedAt]")
-      .between([opts.projectId, NONE], [opts.projectId, NONE])
+      .equals([opts.projectId, NONE])
       .toArray();
   } else {
     switch (view) {
       case "inbox":
         tasks = await db.tasks
           .where("[projectId+deletedAt]")
-          .between(["", NONE], ["", NONE])
+          .equals(["", NONE])
           .toArray();
         break;
       case "completed":
         tasks = await db.tasks
           .where("[status+deletedAt]")
-          .between(["done", NONE], ["done", NONE])
+          .equals(["done", NONE])
           .toArray();
         break;
       case "important":
         tasks = await db.tasks
           .where("[priority+deletedAt]")
-          .between(["high", NONE], ["high", NONE])
+          .equals(["high", NONE])
           .toArray();
         break;
       case "today": {
@@ -87,7 +90,12 @@ export async function queryTasksForView(
     }
   }
 
-  const inView = tasks.filter((t) => matchesView(t, view, nowMs));
+  const inView = opts.projectId
+    ? // A project view lists that project's active tasks (non-done; the index
+      // range already excludes trashed rows) regardless of the highlighted
+      // smart view — `matchesView` would otherwise demand `projectId === ""`.
+      tasks.filter((t) => t.status !== "done")
+    : tasks.filter((t) => matchesView(t, view, nowMs));
   return applyTaskSearchAndFilters(inView, opts.search ?? "", opts.filters ?? {});
 }
 
@@ -122,13 +130,17 @@ export async function querySubtasksByParent(
 
 /**
  * Parent ids that have at least one active (non-trashed) child.
- * Drives the expand chevron without loading full child rows.
+ * Drives the expand chevron from a single index range over `parentId`.
  */
 export async function queryParentIdsWithChildren(): Promise<ReadonlySet<string>> {
-  const rows = await getDb()
-    .tasks.where("parentId")
-    .notEqual("")
-    .filter((t) => t.deletedAt === NONE)
-    .toArray();
-  return new Set(rows.map((t) => t.parentId));
+  // `.above("")` is a plain index-range scan on `parentId` (fast, ~1111 rows at
+  // 10k tasks). `.notEqual("")` and a chained Dexie `.filter()` both fall into
+  // pathological full-collection paths on large tables (seconds, measured), so
+  // the "still active" check is done in JS after the range read.
+  const rows = await getDb().tasks.where("parentId").above("").toArray();
+  const parents = new Set<string>();
+  for (const row of rows) {
+    if (row.deletedAt === NONE) parents.add(row.parentId);
+  }
+  return parents;
 }
