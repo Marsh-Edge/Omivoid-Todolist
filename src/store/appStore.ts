@@ -1,17 +1,13 @@
 import { create } from "zustand";
-import type { TaskStatus, TaskPriority } from "@/types";
+import type { TaskFilterCriteria } from "@/types";
 
 export type View = "inbox" | "today" | "upcoming" | "overdue" | "completed" | "important" | "trash";
 
 /** How the active view's tasks are presented. */
 export type ViewMode = "list" | "board" | "calendar";
 
-export interface AppFilters {
-  status?: TaskStatus[];
-  priority?: TaskPriority[];
-  projectId?: string;
-  tagIds?: string[];
-}
+/** Live filter chips for the active view (same shape as a saved filter). */
+export type AppFilters = TaskFilterCriteria;
 
 export interface AppState {
   activeView: View;

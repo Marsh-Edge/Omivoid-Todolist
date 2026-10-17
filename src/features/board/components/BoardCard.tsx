@@ -1,22 +1,38 @@
 "use client";
 
 import { format } from "date-fns";
-import { CalendarDays, Flag } from "lucide-react";
+import { CalendarDays, Flag, MoreHorizontal } from "lucide-react";
 import { cn } from "cn";
-import { t } from "@/lib/i18n";
-import type { Tag, Task, TaskPriority } from "@/types";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { t, type MessageKey } from "@/lib/i18n";
+import type { Tag, Task, TaskPriority, TaskStatus } from "@/types";
 
 const priorityColors: Record<Exclude<TaskPriority, "none">, string> = {
-  low: "text-blue-500",
-  medium: "text-amber-500",
-  high: "text-red-500",
+  low: "text-blue-500 dark:text-blue-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  high: "text-red-500 dark:text-red-400",
 };
+
+const statusLabelKeys: Record<TaskStatus, MessageKey> = {
+  todo: "statusTodo",
+  in_progress: "statusInProgress",
+  done: "statusDone",
+};
+
+const allStatuses: readonly TaskStatus[] = ["todo", "in_progress", "done"];
 
 export interface BoardCardProps {
   task: Task;
   projectName?: string;
   tags: readonly Tag[];
   onOpen: () => void;
+  onMoveTo: (status: TaskStatus) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }
@@ -26,6 +42,7 @@ export function BoardCard({
   projectName,
   tags,
   onOpen,
+  onMoveTo,
   onDragStart,
   onDragEnd,
 }: BoardCardProps) {
@@ -37,30 +54,42 @@ export function BoardCard({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={t("openNotes", { title: task.title })}
-      className="bg-card hover:bg-muted/60 focus-visible:ring-ring flex h-[76px] w-full cursor-grab flex-col overflow-hidden rounded-md border p-2 text-left shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+      className="bg-card hover:bg-muted/60 group flex h-[76px] w-full cursor-grab flex-col overflow-hidden rounded-md border p-2 text-left shadow-sm transition-colors active:cursor-grabbing"
     >
       <div className="flex items-start gap-1.5">
-        {priority ? (
-          <Flag className={cn("mt-0.5 size-3 shrink-0", priority)} aria-hidden="true" />
-        ) : null}
-        <span
+        {priority ? <Flag className={cn("mt-0.5 size-3 shrink-0", priority)} aria-hidden="true" /> : null}
+        <button
+          type="button"
+          onClick={onOpen}
           className={cn(
-            "line-clamp-2 text-sm",
+            "min-w-0 flex-1 text-left text-sm line-clamp-2",
             isDone && "text-muted-foreground line-through",
           )}
         >
           {task.title}
-        </span>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="-mr-1 size-6 shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+              aria-label={t("moveTaskAria", { title: task.title })}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {allStatuses
+              .filter((status) => status !== task.status)
+              .map((status) => (
+                <DropdownMenuItem key={status} onSelect={() => onMoveTo(status)}>
+                  {t(statusLabelKeys[status])}
+                </DropdownMenuItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">

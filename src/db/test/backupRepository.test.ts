@@ -9,6 +9,7 @@ import {
 import { createTask, listActiveTasks } from "../taskRepository";
 import { createProject, listProjects } from "../projectRepository";
 import { createTag, listTags } from "../tagRepository";
+import { createSavedFilter, listSavedFilters } from "../savedFilterRepository";
 import { OmivoidDatabase, getDb } from "../index";
 
 describe("backupRepository", () => {
@@ -28,10 +29,12 @@ describe("backupRepository", () => {
     const project = await createProject({ name: "Work" });
     const tag = await createTag({ name: "urgent" });
     await createTask({ title: "Ship it", projectId: project.id, tagIds: [tag.id] });
+    await createSavedFilter({ name: "High + urgent", filters: { priority: ["high"], tagIds: [tag.id] } });
 
     const backup = await exportBackup();
     expect(backup.version).toBe(BACKUP_VERSION);
     expect(backup.tasks).toHaveLength(1);
+    expect(backup.savedFilters).toHaveLength(1);
 
     const text = serializeBackup(backup);
     const parsed = parseBackupText(text);
@@ -39,12 +42,30 @@ describe("backupRepository", () => {
     await db.tasks.clear();
     await db.projects.clear();
     await db.tags.clear();
+    await db.savedFilters.clear();
     const result = await importBackup(parsed);
 
-    expect(result).toEqual({ tasks: 1, projects: 1, tags: 1 });
+    expect(result).toEqual({ tasks: 1, projects: 1, tags: 1, savedFilters: 1 });
     expect(await listActiveTasks()).toHaveLength(1);
     expect(await listProjects()).toHaveLength(1);
     expect(await listTags()).toHaveLength(1);
+    expect(await listSavedFilters()).toHaveLength(1);
+  });
+
+  it("imports a legacy backup that has no savedFilters field", async () => {
+    await createTask({ title: "Keep" });
+    const parsed = parseBackupText(
+      JSON.stringify({
+        version: BACKUP_VERSION,
+        exportedAt: 1,
+        tasks: [],
+        projects: [],
+        tags: [],
+      }),
+    );
+    expect(parsed.savedFilters).toEqual([]);
+    const result = await importBackup(parsed);
+    expect(result.savedFilters).toBe(0);
   });
 
   it("imports legacy tasks that predate the recurrence field", async () => {

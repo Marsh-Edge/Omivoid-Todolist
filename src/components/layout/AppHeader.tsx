@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import useAppStore, { type AppState } from "@/store/appStore";
 import useThemeStore from "@/store/themeStore";
 import { useHistory } from "@/features/history/useHistory";
+import { FilterMenu } from "@/features/filters/components/FilterMenu";
+import { SavedFilterMenu } from "@/features/filters/components/SavedFilterMenu";
 import { t, type MessageKey } from "@/lib/i18n";
 import type { ThemeMode } from "@/lib/theme";
 import { cn } from "cn";
@@ -136,6 +138,9 @@ export function AppHeader() {
       >
         <ThemeIcon aria-hidden="true" />
       </Button>
+
+      <FilterMenu />
+      <SavedFilterMenu />
 
       <div className="relative">
         <Button

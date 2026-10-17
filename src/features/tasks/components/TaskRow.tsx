@@ -22,9 +22,9 @@ import { format } from "date-fns";
 import type { Tag, Task, TaskPriority, SmartView } from "@/types";
 
 const priorityColors: Record<Exclude<TaskPriority, "none">, string> = {
-  low: "text-blue-500",
-  medium: "text-amber-500",
-  high: "text-red-500",
+  low: "text-blue-500 dark:text-blue-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  high: "text-red-500 dark:text-red-400",
 };
 
 export interface TaskRowProps {
@@ -147,7 +147,10 @@ export function TaskRow({
             isDone && "bg-primary border-primary text-primary-foreground",
           )}
         >
-          {isDone ? <Check className="size-3" aria-hidden="true" /> : null}
+          <Check
+            className={cn("size-3 transition-transform", isDone ? "scale-100" : "scale-0")}
+            aria-hidden="true"
+          />
         </button>
       ) : null}
 
@@ -156,7 +159,7 @@ export function TaskRow({
         onClick={handleTitleClick}
         title={t("openNotes", { title: task.title })}
         className={cn(
-          "min-w-0 flex-1 truncate text-left text-sm",
+          "min-w-0 flex-1 truncate text-left text-sm transition-colors",
           isDone && "text-muted-foreground line-through",
         )}
       >
@@ -179,7 +182,11 @@ export function TaskRow({
         <span
           className={cn(
             "flex shrink-0 items-center gap-1 text-xs tabular-nums",
-            dueOverdue ? "text-red-500" : dueToday ? "text-amber-500" : "text-muted-foreground",
+            dueOverdue
+              ? "text-red-600 dark:text-red-400"
+              : dueToday
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground",
           )}
         >
           <CalendarDays className="size-3" aria-hidden="true" />

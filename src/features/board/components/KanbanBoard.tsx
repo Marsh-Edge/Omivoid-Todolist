@@ -100,6 +100,7 @@ export default function KanbanBoard() {
               setDragOver(null);
             }}
             onCardOpen={setDetailTaskId}
+            onCardMove={handleDrop}
           />
         ))}
       </div>

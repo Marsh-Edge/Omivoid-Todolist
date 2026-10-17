@@ -79,6 +79,27 @@ export interface Tag {
   createdAt: number;
 }
 
+/**
+ * Criteria that narrow the active view's task list. Every field is optional;
+ * an absent field means "no constraint". Shared by the store (live UI state)
+ * and saved filters (a named, reusable snapshot of the same shape).
+ */
+export interface TaskFilterCriteria {
+  status?: TaskStatus[];
+  priority?: TaskPriority[];
+  projectId?: string;
+  /** A task matches when it carries any of the selected tags (OR). */
+  tagIds?: string[];
+}
+
+/** A named, reusable set of filter criteria (stored in IndexedDB). */
+export interface SavedFilter {
+  id: string;
+  name: string;
+  filters: TaskFilterCriteria;
+  createdAt: number;
+}
+
 /** Lightweight metadata for a rolling local backup (no payload). */
 export interface SnapshotMeta {
   id: string;

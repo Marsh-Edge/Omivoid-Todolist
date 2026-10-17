@@ -1,5 +1,5 @@
 import { addDays, startOfDay } from "date-fns";
-import type { Task, TaskPriority, TaskStatus } from "@/types";
+import type { Task, TaskFilterCriteria } from "@/types";
 
 /**
  * Pure, testable search / filter / group predicates shared by the view hook
@@ -10,13 +10,7 @@ import type { Task, TaskPriority, TaskStatus } from "@/types";
  * (see `queryTasksForView`), so a search never triggers a full-table scan.
  */
 
-export interface TaskFilterCriteria {
-  status?: TaskStatus[];
-  priority?: TaskPriority[];
-  projectId?: string;
-  /** A task matches when it carries *any* of the selected tags (OR). */
-  tagIds?: string[];
-}
+export type { TaskFilterCriteria };
 
 /** Case-insensitive substring match over the title and notes. */
 export function matchesSearch(task: Task, query: string): boolean {

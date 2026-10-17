@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isValidRecurrence } from "@/lib/recurrence";
-import type { Project, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
+import type { Project, SavedFilter, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
 
 /**
  * Zod schemas are the single validation gate for everything entering
@@ -72,6 +72,18 @@ export const snapshotDataSchema: z.ZodType<SnapshotData> = z.object({
   tasks: z.array(taskSchema),
   projects: z.array(projectSchema),
   tags: z.array(tagSchema),
+});
+
+export const savedFilterSchema: z.ZodType<SavedFilter> = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1).max(100),
+  filters: z.object({
+    status: z.array(taskStatusSchema).max(3).optional(),
+    priority: z.array(taskPrioritySchema).max(4).optional(),
+    projectId: z.string().max(200).optional(),
+    tagIds: z.array(idSchema).max(200).optional(),
+  }),
+  createdAt: timestampSchema,
 });
 
 export const taskCreateInputSchema = z.object({

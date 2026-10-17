@@ -31,7 +31,7 @@ export function Toaster() {
           <div
             key={item.id}
             role={item.variant === "error" ? "alert" : "status"}
-            className="bg-popover ring-border pointer-events-auto flex items-start gap-2 rounded-lg p-3 text-sm shadow-lg ring-1"
+            className="bg-popover ring-border pointer-events-auto flex items-start gap-2 rounded-lg p-3 text-sm shadow-lg ring-1 animate-in slide-in-from-bottom-2 fade-in-0 duration-200"
           >
             <Icon className={cn("mt-0.5 size-4 shrink-0", className)} aria-hidden="true" />
             <p className="min-w-0 flex-1 break-words">{item.message}</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format } from "date-fns";
 import { CalendarDays, Flag, X } from "lucide-react";
@@ -21,9 +21,9 @@ const priorityLabelKeys = {
 } as const;
 
 const priorityClasses: Record<Exclude<Task["priority"], "none">, string> = {
-  low: "text-blue-500",
-  medium: "text-amber-500",
-  high: "text-red-500",
+  low: "text-blue-500 dark:text-blue-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  high: "text-red-500 dark:text-red-400",
 };
 
 /**
@@ -33,6 +33,22 @@ const priorityClasses: Record<Exclude<Task["priority"], "none">, string> = {
  */
 export function TaskDetailPanel() {
   const detailTaskId = useAppStore((s) => s.detailTaskId);
+  const wasOpenRef = useRef(false);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  // Remember the element that opened the panel and restore focus on close.
+  useEffect(() => {
+    if (detailTaskId && !wasOpenRef.current) {
+      triggerRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    } else if (!detailTaskId && wasOpenRef.current) {
+      const trigger = triggerRef.current;
+      triggerRef.current = null;
+      if (trigger && document.contains(trigger)) trigger.focus();
+    }
+    wasOpenRef.current = detailTaskId !== null;
+  }, [detailTaskId]);
+
   if (!detailTaskId) return null;
   return <TaskDetailContent taskId={detailTaskId} />;
 }
@@ -40,6 +56,12 @@ export function TaskDetailPanel() {
 function TaskDetailContent({ taskId }: { taskId: string }) {
   const setDetailTaskId = useAppStore((s) => s.setDetailTaskId);
   const projects = useProjects();
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the panel when it opens.
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
 
   const task = useLiveQuery(
     async (): Promise<Task | null> => (await getTask(taskId)) ?? null,
@@ -59,8 +81,14 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
 
   return (
     <aside
-      className="flex h-full w-[400px] max-w-[45vw] shrink-0 flex-col border-l"
+      className="flex h-full w-[400px] max-w-[45vw] shrink-0 flex-col border-l animate-in slide-in-from-right-4 fade-in-0 duration-150"
       aria-label={t("taskDetailAria")}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          setDetailTaskId(null);
+        }
+      }}
     >
       <div className="flex items-start gap-2 border-b px-4 py-3">
         <div className="min-w-0 flex-1">
@@ -90,6 +118,7 @@ function TaskDetailContent({ taskId }: { taskId: string }) {
         </div>
         <Button
           type="button"
+          ref={closeRef}
           variant="ghost"
           size="icon-sm"
           onClick={() => setDetailTaskId(null)}

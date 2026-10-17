@@ -22,7 +22,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 2** — Tier 1 core: tasks, subtasks, projects, tags, smart views
 - [x] **Phase 3** — Tier 1 rest: search, filters, group-by, command palette, shortcuts, import/export, dark/light mode
 - [x] **Phase 4** — Tier 2 features, in small groups (Groups 1–7 done)
-- [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests — **in progress (Step 0 gap fixes + Step 1 perf audit done)**
+- [x] **Phase 5** — Tier 3 + polish, animations, performance audit, tests, README — **DONE** (Markdown export done; graph view / Pomodoro / timeline-lite out of scope)
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -240,11 +240,13 @@ set yet — fine for Windows/Linux); quick-add focus is best-effort (if the acti
 AppIndicator support; window placement is validated against display *overlap* only (not full
 containment).
 
-## Phase 5 — Tier 3 + polish (only if performance budget allows) — IN PROGRESS
+## Phase 5 — Tier 3 + polish — DONE
 
 - Graph view, Pomodoro timer, timeline-lite, saved filters, Markdown export (each optional)
-- Animations (CSS first), accessibility pass, performance audit at 10,000 tasks
-- Full test suite; final README (Windows + Linux setup/build/packaging)
+  - **Saved filters: done (Step 5). Markdown export: done (fixed + verified in the Step 6–8 round).**
+    Graph view, Pomodoro timer and timeline-lite stay out of scope.
+- Animations (CSS first) ✓ (Step 6), accessibility pass ✓ (Step 7), performance audit at 10,000 tasks ✓ (Step 1)
+- Full test suite ✓ (177 tests / 26 files); final README ✓ (Step 8)
 
 ### Step 0 — gap fixes (done)
 
@@ -345,7 +347,7 @@ already-index-narrowed set. Import (`bulkAdd` of 10k rows) is ~530 ms — a one-
 - The due-date views (`today`/`upcoming`/`overdue`) range on `dueAt` only, so they read done and
   trashed rows too and let `matchesView` drop them. Cheap enough at 10k (6–17 ms), but a
   `[dueAt+deletedAt]` index would trim the read if profiling ever flags it.
-- `useActiveTasks` in `src/features/tasks/useTasks.ts` is **dead code** (no consumers); remove it.
+- `useActiveTasks` in `src/features/tasks/useTasks.ts` was **dead code** (no consumers); removed in Step 3.
 
 Temp harness files and the generated `omivoid-seed.json` were deleted; only the
 `src/db/test/taskQueries.test.ts` regression suite was kept.
@@ -354,6 +356,107 @@ Verification after Step 1: `npm run build` ✓ (static export), `npm run lint` �
 pre-existing `useVirtualizer` warnings), `npm test` ✓ (**135 tests / 17 files**, +7 new). Bundle
 unchanged (1,007 KB JS / 57 KB CSS) — the fixes touch the DB layer only.
 
+### Step 3 — test depth: repositories + presentational components (done)
+
+Chosen depth: **DB repositories + component tests** (no coverage threshold gate).
+
+- Removed dead `useActiveTasks` from `src/features/tasks/useTasks.ts` (no consumers since the view
+  hooks moved to `useTasksForView`). The file is now deleted.
+- **`src/db/test/projectRepository.test.ts`** (7 tests): create defaults + name trim, empty-name
+  rejection, `order`-keyed listing, root-only listing, update preserves `createdAt`, missing-project
+  update error, delete.
+- **`src/db/test/tagRepository.test.ts`** (6 tests): trim + color, empty-name rejection, alphabetical
+  listing, update preserves `createdAt`, missing-tag update error, delete.
+- **`src/features/tasks/components/TaskList.test.tsx`** (3 tests): renders a row per inbox task, inbox
+  empty state, subtask rows when the parent is expanded. The `@tanstack/react-virtual` module is
+  mocked so every row renders (jsdom has no sized scroll container); the tests assert row *content*,
+  not virtualizer internals.
+- **`src/features/tasks/components/TaskEditDialog.test.tsx`** (3 tests): create with the entered
+  title, empty-title alert (no write), rename an existing task (round-trips through the DB).
+- **`src/components/layout/Sidebar.test.tsx`** (2 tests): rename a project through the edit dialog,
+  toggle a tag filter (`filters.tagIds`). `next/navigation` and `next/link` are mocked.
+- **`src/test/setup.ts`** now stubs the browser APIs jsdom lacks that Radix UI and the virtualizer
+  need: `ResizeObserver`, `matchMedia`, `scrollIntoView`, pointer-capture methods and
+  `URL.createObjectURL`/`revokeObjectURL`.
+- Added `test:coverage` (`vitest run --coverage`) — informational, no threshold gate.
+
+Verification after Step 3: `npm test` ✓ (**156 tests / 22 files**, +21 new), `npm run lint` ✓ (0
+errors, the same 2 `useVirtualizer` warnings), `npm run build` ✓. Bundle unchanged
+(1,007 KB JS initial / 1,178 KB total incl. lazy / 57 KB CSS) — tests live outside the app bundle.
+
+### Step 5 — saved filters (done)
+
+A named, reusable snapshot of the active view's filter criteria, plus the missing status/priority
+filter UI. Chosen scope: a saved filter captures **filter criteria only** (status/priority/project/
+tags) — sort/group and the active view stay as-is when applied.
+
+- **One criteria type.** `TaskFilterCriteria` now lives in `src/types`; `src/lib/taskFilters.ts`
+  re-exports it and the store's `AppFilters` is a type alias of it, so the live filter state and a
+  saved filter can never drift apart.
+- **Dexie v6** adds a tiny `savedFilters` table (`id, name, createdAt`); the existing stores are
+  repeated unchanged in the new version block (Dexie requires the full schema per version).
+- **`src/db/savedFilterRepository.ts`**: `createSavedFilter`, `listSavedFilters`,
+  `getSavedFilter`, `renameSavedFilter`, `deleteSavedFilter`, plus `normalizeFilters` (drops empty
+  clauses so a preset never stores a no-op). Deliberately **not** wired into undo/redo — presets are
+  lightweight UI state, and a stray Ctrl+Z should not silently add/remove one.
+- **Backup**: `backupSchema` gains an optional `savedFilters` array (`.default([])`), so v1 backups
+  written before this step still import cleanly; `exportBackup`/`importBackup` include them and
+  `ImportResult` reports the count.
+- **UI** (`AppHeader`, next to sort/group): `FilterMenu` — status + priority toggle chips with an
+  active-filter count badge and a Clear action; `SavedFilterMenu` — a name field that saves the
+  current filters, a list to apply each preset, and a delete button. Applying a preset calls
+  `setFilters(...)`, so the existing live query re-runs with no new query path. A small
+  `useDismissable` hook adds outside-click + Escape dismissal (the older sort menu keeps its
+  toggle-only behaviour).
+- **Tests** (+16): `savedFilterRepository` (8), `FilterMenu` (4), `SavedFilterMenu` (3), and the
+  backup round-trip now creates/restores a preset (plus a legacy-backup case with no `savedFilters`).
+
+Verification after Step 5: `npm test` ✓ (**172 tests / 25 files**), `npm run lint` ✓ (0 errors, the
+same 2 `useVirtualizer` warnings), `npm run build` ✓. Bundle 1,178 KB → **1,186 KB** total (+8 KB,
+in the initial bundle since the header is always mounted) / CSS unchanged 57 KB.
+
+### Steps 6–8 — animations, accessibility, README (done — final round)
+
+This round also fixed the in-tree **Markdown export** feature (`src/features/data/markdownExport.ts`,
+wired to the command palette since an earlier round): it had a parse error (incomplete
+`const  = new Map(...)` declaration) and a missing `vi` import in its test, which broke lint and
+`next build`. Fixed, dead code removed (unused `db`/`projectMap`/empty imports, unused test helpers),
+and its 5 tests now run green in CI.
+
+**Step 6 — animations (CSS-first, no JS, no dependencies).**
+- Global `prefers-reduced-motion: reduce` opt-out in `globals.css` (animation/transition duration
+  collapse + `scroll-behavior: auto`) — this was missing app-wide.
+- Checkbox check-mark pop: the `Check` icon is now always rendered and toggled with
+  `scale-0`/`scale-100` + `transition-transform`, so the animation only plays on an actual state
+  change — virtualized rows remount on scroll, and a mount-based animation would flicker constantly.
+- Toast enter (`slide-in-from-bottom-2 fade-in-0`), task detail panel enter
+  (`slide-in-from-right-4 fade-in-0`), smooth done-state color on the task title.
+
+**Step 7 — accessibility pass.**
+- **Board keyboard path**: a card was one big `role="button"` (invalid nesting) and status changes
+  were drag-only. `BoardCard` now uses a real title `<button>` (Enter/Space opens notes) plus a
+  keyboard-accessible **move menu** (`⋯` → To do / In progress / Done, current status hidden) that
+  calls the same recurrence-aware `setTaskStatus` as drag & drop. New i18n keys `moveTaskAria`.
+- **Task detail panel focus management**: focus moves to the close button on open, Escape closes
+  (stopPropagation so it doesn't leak), and focus restores to the triggering task title on close.
+- **Skip-to-content link** (first focusable element, `sr-only` until focused) + `id="main-content"`
+  with `tabIndex={-1}` on `<main>`; new key `skipToContent`.
+- **Contrast (WCAG 1.4.11 / 1.4.3)**: priority flags and due-date text used `amber-500` (≈2.1:1 on
+  white — fails even the 3:1 non-text threshold) and `red-500` (fails 4.5:1 as text). Now
+  `amber-600/red-600` + `dark:amber-400/dark:red-400` (matching the existing toaster pattern) in
+  `TaskRow`, `TaskDetailPanel` and `BoardCard`. Blue-500 passed 3:1 as an icon and stays.
+- Toasts already had `role="status"`/`alert` inside a labelled region — verified, no change.
+
+**Step 8 — README.** The existing `README.md` was expanded into the plan's final deliverable:
+local-only guarantees, stack, full feature list, requirements, quick start, scripts table, seed
+usage, data/backup notes, desktop + packaging (Windows NSIS / Linux AppImage, icon, asar,
+loopback origin, tray behavior), and an architecture pointer table.
+
+Verification after Steps 6–8: `npm run lint` ✓ (0 errors, only the 2 accepted `useVirtualizer`
+warnings — 5 dead-code warnings in the markdown-export files were also cleaned up), `npm test` ✓
+(**177 tests / 26 files**, +5 markdown-export), `npm run build` ✓ (static export). Bundle
+**1,021 KB initial JS / +229 KB lazy / 59.8 KB CSS** (see table below).
+
 ## Performance budget (checked at the end of every phase)
 
 - Report `out/_next/static` bundle size (JS + CSS)
@@ -361,7 +464,7 @@ unchanged (1,007 KB JS / 57 KB CSS) — the fixes touch the DB layer only.
 - Lazy-load: Markdown editor, graph, charts, calendar, command palette
 - Every common query must hit an IndexedDB index
 
-### Latest measurement (end of Phase 4 Group 7)
+### Latest measurement (end of Phase 5 — final)
 
 | Milestone | Initial JS | Lazy JS | CSS |
 | --- | --- | --- | --- |
@@ -373,8 +476,15 @@ unchanged (1,007 KB JS / 57 KB CSS) — the fixes touch the DB layer only.
 | End of Phase 4 Group 4 | 975 KB | +9 KB (board + calendar) | 56 KB |
 | End of Phase 4 Group 5 | 986 KB | +9 KB (board + calendar) | 56 KB |
 | End of Phase 4 Group 6 | 997 KB | + board + calendar + stats route (171 KB) | 58 KB |
-| **End of Phase 4 Group 7** | **997 KB** | +171 KB | **56 KB** |
-| **Phase 5 Step 0 (gap fixes)** | **1,007 KB** | +171 KB | **57 KB** |
+| End of Phase 4 Group 7 | 997 KB | +171 KB | 56 KB |
+| Phase 5 Step 0 (gap fixes) | 1,007 KB | +171 KB | 57 KB |
+| **End of Phase 5 (final)** | **1,021 KB** | **+229 KB** | **59.8 KB** |
+
+The final row is the first clean measurement since the **Markdown-export feature** landed in the
+tree (it was never measured by the Group 7 / Step 0 rows); it accounts for most of the +14 KB
+initial / +58 KB lazy growth. The Step 6–8 UI work (move menu, skip link, reduced-motion CSS,
+animations) adds well under 3 KB initial + ~3 KB CSS. Markdown editor, charts/stats, board and
+calendar all remain lazy chunks.
 
 Group 7 is an Electron-shell group: it adds roughly 0.3 KB to the renderer (the `useDesktopBridge`
 IPC hook) and everything else runs in the main process, so the web bundle is unchanged. (Measured
@@ -451,3 +561,15 @@ to the *already index-narrowed* view result, so the candidate set is bounded by 
 | Color/icon editing lives in edit dialogs, not the create forms | Progressive disclosure (sidebar stays uncluttered); the sidebar row already provides the pencil affordance |
 | Packaging excludes `node_modules` (`!**/node_modules/**/*`) | The Electron shell uses only built-ins and serves static files, so runtime deps are dead weight — this shrank `app.asar` from 312 MB to 1.42 MB |
 | `build/icon.png` un-ignored from `/build` | electron-builder auto-detects `buildResources: build`; the icon must be committed for reproducible packaging |
+| Saved filters stored in a Dexie v6 `savedFilters` table, capturing filter criteria only | Presets are user data (survive a reload and ride along in backups) but reference no tasks; capturing sort/group/view as well would make "apply" unpredictable. Reuses the existing live-query path via `setFilters` |
+| Saved filters excluded from undo/redo | They are lightweight UI state, not task data; a stray Ctrl+Z should not silently add or remove a preset |
+| `TaskFilterCriteria` moved to `src/types` and aliased by the store | One shape for live filters and saved presets, so they cannot drift |
+| Global `prefers-reduced-motion` opt-out in `globals.css` | One media query disables every transition/animation app-wide (WCAG 2.3.3); `tw-animate-css` only covered its own utilities |
+| Check-mark pop uses always-rendered icon + `transition-transform`, not a mount animation | Virtualized rows remount on scroll; a mount-triggered animation would flicker on every scroll — a state-change transition only plays on real toggles |
+| Animations are CSS-only (Tailwind/`tw-animate-css` utilities) | Honors "animations (CSS first)" + minimal-dependency rules; zero JS cost |
+| Board card restructured: title `<button>` + move-menu button (no `role="button"` wrapper) | A `role="button"` containing interactive children is invalid; keyboard users get real tab stops and a drag-free path to change status |
+| Board move menu calls the shared `setTaskStatus` | Same recurrence-aware completion path as drag & drop and the list checkbox — one behavior everywhere |
+| Task detail panel: focus close button on open, Escape closes, focus restores to trigger | Non-modal side panel needs explicit focus management so keyboard/AT users aren't stranded |
+| Skip-to-content link + `tabIndex={-1}` main | Standard keyboard/AT affordance; `main` is focusable as the link target without entering the tab order |
+| Priority/due colors: `amber-600/red-600` + `dark:*-400` | `amber-500` fails WCAG 1.4.11 (2.1:1 as an icon) and 1.4.3 as text on white; the dark-variant pair matches the existing toaster pattern |
+| Markdown-export files cleaned rather than reverted | The feature was wired to the command palette and nearly complete; fixing the parse error + dead code was smaller and more useful than deleting it |

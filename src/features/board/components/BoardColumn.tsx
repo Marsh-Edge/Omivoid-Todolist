@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "cn";
 import { BoardCard } from "./BoardCard";
-import type { Tag, Task } from "@/types";
+import type { Tag, Task, TaskStatus } from "@/types";
 
 /** Card height (76px) + 8px gap; the virtualizer uses it as a fixed estimate. */
 const ITEM_HEIGHT = 84;
@@ -21,6 +21,7 @@ export interface BoardColumnProps {
   onCardDragStart: (id: string) => void;
   onCardDragEnd: () => void;
   onCardOpen: (id: string) => void;
+  onCardMove: (id: string, status: TaskStatus) => void;
 }
 
 export function BoardColumn({
@@ -35,6 +36,7 @@ export function BoardColumn({
   onCardDragStart,
   onCardDragEnd,
   onCardOpen,
+  onCardMove,
 }: BoardColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +90,7 @@ export function BoardColumn({
                       .map((id) => tagById.get(id))
                       .filter((tag): tag is Tag => tag !== undefined)}
                     onOpen={() => onCardOpen(task.id)}
+                    onMoveTo={(status) => onCardMove(task.id, status)}
                     onDragStart={() => onCardDragStart(task.id)}
                     onDragEnd={onCardDragEnd}
                   />

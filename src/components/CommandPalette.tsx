@@ -37,6 +37,7 @@ import useAppStore, { type View } from "@/store/appStore";
 import useThemeStore from "@/store/themeStore";
 import { toast } from "@/store/toastStore";
 import { downloadBackup, importBackupFile } from "@/features/data/backupActions";
+import { exportTasksAsMarkdown } from "@/features/data/markdownExport";
 import { createSnapshot } from "@/db/snapshotRepository";
 import { redo, undo } from "@/db/history";
 import {
@@ -166,6 +167,38 @@ export function CommandPalette() {
     });
   }
 
+  function exportMarkdownView() {
+    run(async () => {
+      try {
+        const count = await exportTasksAsMarkdown("view");
+        if (count === 0) {
+          toast.info(t("exportMarkdownEmpty"));
+        } else {
+          toast.success(t("exportMarkdownSuccess", { count }));
+        }
+      } catch (error) {
+        toUserMessage(error);
+        toast.error(t("exportFailed"));
+      }
+    });
+  }
+
+  function exportMarkdownAll() {
+    run(async () => {
+      try {
+        const count = await exportTasksAsMarkdown("all");
+        if (count === 0) {
+          toast.info(t("exportMarkdownEmpty"));
+        } else {
+          toast.success(t("exportMarkdownSuccess", { count }));
+        }
+      } catch (error) {
+        toUserMessage(error);
+        toast.error(t("exportFailed"));
+      }
+    });
+  }
+
   function startImport() {
     fileInputRef.current?.click();
   }
@@ -255,6 +288,14 @@ export function CommandPalette() {
             <CommandItem value="export download backup json" onSelect={exportData}>
               <Download aria-hidden="true" />
               {t("paletteExport")}
+            </CommandItem>
+            <CommandItem value="export markdown current view download md" onSelect={exportMarkdownView}>
+              <Download aria-hidden="true" />
+              {t("paletteExportMarkdownView")}
+            </CommandItem>
+            <CommandItem value="export markdown all tasks download md" onSelect={exportMarkdownAll}>
+              <Download aria-hidden="true" />
+              {t("paletteExportMarkdownAll")}
             </CommandItem>
             <CommandItem value="import restore backup json" onSelect={startImport}>
               <Upload aria-hidden="true" />

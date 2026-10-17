@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { Project, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
+import type { Project, SavedFilter, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
 
 export const DATABASE_NAME = "omivoid";
 
@@ -18,6 +18,7 @@ export class OmivoidDatabase extends Dexie {
   tags!: Table<Tag, string>;
   snapshots!: Table<SnapshotMeta, string>;
   snapshotData!: Table<SnapshotData, string>;
+  savedFilters!: Table<SavedFilter, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -64,6 +65,15 @@ export class OmivoidDatabase extends Dexie {
         "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds",
       snapshots: "id, createdAt",
       snapshotData: "id",
+    });
+
+    // v6: named, reusable filter presets. Tiny table, no upgrade callback.
+    this.version(6).stores({
+      tasks:
+        "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds",
+      snapshots: "id, createdAt",
+      snapshotData: "id",
+      savedFilters: "id, name, createdAt",
     });
   }
 }
