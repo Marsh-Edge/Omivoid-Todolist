@@ -15,8 +15,6 @@ const eslintConfig = defineConfig([
     // Generated / packaged output:
     "electron/out/**",
     "release/**",
-    // esbuild bundle of the 10k perf-seed script (source: scripts/seed-10k.ts):
-    "scripts/*.cjs",
   ]),
 ]);
 

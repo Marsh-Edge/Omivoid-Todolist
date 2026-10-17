@@ -11,6 +11,7 @@ import {
   Circle,
   Clock,
   Inbox,
+  Pencil,
   Plus,
   Star,
   Trash2,
@@ -24,8 +25,11 @@ import { useTags } from "@/features/tags/useTags";
 import { createProject } from "@/db/projectRepository";
 import { createTag, deleteTag } from "@/db/tagRepository";
 import { toUserMessage } from "@/lib/errors";
+import { PROJECT_ICON_MAP } from "@/lib/projectIcons";
 import { t } from "@/lib/i18n";
-import type { Project } from "@/types";
+import { ProjectEditDialog } from "@/features/projects/components/ProjectEditDialog";
+import { TagEditDialog } from "@/features/tags/components/TagEditDialog";
+import type { Project, Tag } from "@/types";
 
 const views: ReadonlyArray<{ id: View; labelKey: Parameters<typeof t>[0]; icon: LucideIcon }> = [
   { id: "inbox", labelKey: "viewInbox", icon: Inbox },
@@ -51,6 +55,27 @@ function buildTree(projects: Project[]): Project[] {
   return ordered;
 }
 
+/** A project's icon when one is set, otherwise a colored dot. */
+function ProjectGlyph({ project }: { project: Project }) {
+  const Icon = PROJECT_ICON_MAP[project.icon];
+  if (Icon) {
+    return (
+      <Icon
+        className="size-4 shrink-0"
+        style={project.color ? { color: project.color } : undefined}
+        aria-hidden="true"
+      />
+    );
+  }
+  return (
+    <span
+      className="size-2 shrink-0 rounded-full"
+      style={{ backgroundColor: project.color || "var(--primary)" }}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function Sidebar() {
   const activeView = useAppStore((s) => s.activeView);
   const setActiveView = useAppStore((s) => s.setActiveView);
@@ -73,6 +98,8 @@ export function Sidebar() {
   const [projectName, setProjectName] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const [tagName, setTagName] = useState("");
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [editTag, setEditTag] = useState<Tag | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleProjectSubmit(event: FormEvent) {
@@ -189,26 +216,34 @@ export function Sidebar() {
             <p className="text-muted-foreground px-2 text-xs">{t("noProjects")}</p>
           ) : (
             orderedProjects.map((p) => (
-              <button
+              <div
                 key={p.id}
-                type="button"
-                onClick={() => {
-                  goHome();
-                  setSelectedProjectId(p.id);
-                  setActiveView("inbox");
-                }}
                 className={cn(
-                  "hover:bg-accent focus-visible:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-none",
+                  "group hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors",
                   selectedProjectId === p.id && "bg-accent font-medium",
                 )}
               >
-                <span
-                  className="size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: p.color || "var(--primary)" }}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{p.name}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    goHome();
+                    setSelectedProjectId(p.id);
+                    setActiveView("inbox");
+                  }}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none"
+                >
+                  <ProjectGlyph project={p} />
+                  <span className="truncate">{p.name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditProject(p)}
+                  aria-label={t("editProjectAria", { name: p.name })}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Pencil className="size-3" aria-hidden="true" />
+                </button>
+              </div>
             ))
           )}
         </div>
@@ -278,6 +313,14 @@ export function Sidebar() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setEditTag(tag)}
+                  aria-label={t("editTagAria", { name: tag.name })}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Pencil className="size-3" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => void deleteTag(tag.id).catch(toUserMessage)}
                   aria-label={t("deleteTagAria", { name: tag.name })}
                   className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
@@ -295,6 +338,21 @@ export function Sidebar() {
           {error}
         </p>
       ) : null}
+
+      <ProjectEditDialog
+        project={editProject}
+        open={editProject !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditProject(null);
+        }}
+      />
+      <TagEditDialog
+        tag={editTag}
+        open={editTag !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditTag(null);
+        }}
+      />
     </aside>
   );
 }
