@@ -9,13 +9,14 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Repeat,
   RotateCcw,
   Trash2,
   Trash,
 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { t } from "@/lib/i18n";
+import { recurrenceLabel, t } from "@/lib/i18n";
 import { isOverdue, isToday } from "@/lib/viewPredicates";
 import { format } from "date-fns";
 import type { Tag, Task, TaskPriority, SmartView } from "@/types";
@@ -44,6 +45,7 @@ export interface TaskRowProps {
   };
   onToggleExpand: () => void;
   onToggleComplete: () => void;
+  onOpenDetail: () => void;
   onEdit: () => void;
   onAddSubtask: () => void;
   onTrash: () => void;
@@ -61,6 +63,7 @@ export function TaskRow({
   dragHandleProps,
   onToggleExpand,
   onToggleComplete,
+  onOpenDetail,
   onEdit,
   onAddSubtask,
   onTrash,
@@ -77,9 +80,9 @@ export function TaskRow({
   const dueToday = showDue && isToday(task.dueAt, nowMs);
   const priority = task.priority !== "none" ? priorityColors[task.priority] : null;
 
-  function handleTitleClick(e: MouseEvent<HTMLSpanElement>) {
+  function handleTitleClick(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
-    onEdit();
+    onOpenDetail();
   }
 
   return (
@@ -148,17 +151,29 @@ export function TaskRow({
         </button>
       ) : null}
 
-      <span
+      <button
+        type="button"
         onClick={handleTitleClick}
+        title={t("openNotes", { title: task.title })}
         className={cn(
-          "min-w-0 flex-1 cursor-pointer truncate text-sm",
+          "min-w-0 flex-1 truncate text-left text-sm",
           isDone && "text-muted-foreground line-through",
         )}
       >
         {task.title}
-      </span>
+      </button>
 
       {priority ? <Flag className={cn("size-3 shrink-0", priority)} aria-hidden="true" /> : null}
+
+      {task.recurrence ? (
+        <span
+          className="text-muted-foreground shrink-0"
+          title={t("taskRepeats", { rule: recurrenceLabel(task.recurrence) })}
+        >
+          <Repeat className="size-3" aria-hidden="true" />
+          <span className="sr-only">{t("taskRepeats", { rule: recurrenceLabel(task.recurrence) })}</span>
+        </span>
+      ) : null}
 
       {showDue ? (
         <span

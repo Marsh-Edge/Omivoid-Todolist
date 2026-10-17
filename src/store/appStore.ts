@@ -3,6 +3,9 @@ import type { TaskStatus, TaskPriority } from "@/types";
 
 export type View = "inbox" | "today" | "upcoming" | "overdue" | "completed" | "important" | "trash";
 
+/** How the active view's tasks are presented. */
+export type ViewMode = "list" | "board" | "calendar";
+
 export interface AppFilters {
   status?: TaskStatus[];
   priority?: TaskPriority[];
@@ -20,8 +23,19 @@ export interface AppState {
   sortBy: "dueAt" | "createdAt" | "updatedAt" | "order";
   sortDir: "asc" | "desc";
   groupBy: "none" | "project" | "date" | "tag";
+  /** Presentation of the active view: flat list, kanban board or month calendar. */
+  viewMode: ViewMode;
   /** Ids of tasks whose subtask rows are expanded in the list. */
   expandedTaskIds: ReadonlySet<string>;
+  /** Whether the command palette dialog is open. */
+  paletteOpen: boolean;
+  setPaletteOpen: (paletteOpen: boolean) => void;
+  /** Whether the rolling-backups dialog is open. */
+  backupsOpen: boolean;
+  setBackupsOpen: (backupsOpen: boolean) => void;
+  /** Task whose detail (notes/backlinks) panel is open, or null. */
+  detailTaskId: string | null;
+  setDetailTaskId: (detailTaskId: string | null) => void;
   setActiveView: (activeView: View) => void;
   setSelectedProjectId: (selectedProjectId: string | null) => void;
   setSearchQuery: (searchQuery: string) => void;
@@ -30,6 +44,7 @@ export interface AppState {
   setSortBy: (sortBy: AppState["sortBy"]) => void;
   setSortDir: (sortDir: AppState["sortDir"]) => void;
   setGroupBy: (groupBy: AppState["groupBy"]) => void;
+  setViewMode: (viewMode: ViewMode) => void;
   toggleTaskExpanded: (id: string) => void;
   collapseAllTasks: () => void;
 }
@@ -42,7 +57,14 @@ const useAppStore = create<AppState>((set) => ({
   sortBy: "order",
   sortDir: "asc",
   groupBy: "none",
+  viewMode: "list",
   expandedTaskIds: new Set<string>(),
+  paletteOpen: false,
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  backupsOpen: false,
+  setBackupsOpen: (backupsOpen) => set({ backupsOpen }),
+  detailTaskId: null,
+  setDetailTaskId: (detailTaskId) => set({ detailTaskId }),
   setActiveView: (activeView) => set({ activeView }),
   setSelectedProjectId: (selectedProjectId) => set({ selectedProjectId }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -51,6 +73,7 @@ const useAppStore = create<AppState>((set) => ({
   setSortBy: (sortBy) => set({ sortBy }),
   setSortDir: (sortDir) => set({ sortDir }),
   setGroupBy: (groupBy) => set({ groupBy }),
+  setViewMode: (viewMode) => set({ viewMode }),
   toggleTaskExpanded: (id) =>
     set((state) => {
       const next = new Set(state.expandedTaskIds);

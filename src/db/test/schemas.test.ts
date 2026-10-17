@@ -19,6 +19,7 @@ describe("schemas", () => {
       parentId: "",
       tagIds: [],
       dueAt: 0,
+      recurrence: "",
       completedAt: 0,
       deletedAt: 0,
       order: 123,

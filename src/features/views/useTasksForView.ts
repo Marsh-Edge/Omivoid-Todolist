@@ -17,11 +17,15 @@ export function useTasksForView(): Task[] | undefined {
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const sortBy = useAppStore((s) => s.sortBy);
   const sortDir = useAppStore((s) => s.sortDir);
+  const searchQuery = useAppStore((s) => s.searchQuery);
+  const filters = useAppStore((s) => s.filters);
 
   return useLiveQuery(
     async () => {
       const tasks = await queryTasksForView(view, {
         projectId: selectedProjectId ?? undefined,
+        search: searchQuery,
+        filters,
       });
       const dir = sortDir === "desc" ? -1 : 1;
       const sorted = [...tasks].sort((a, b) => {
@@ -31,6 +35,18 @@ export function useTasksForView(): Task[] | undefined {
       // Top-level tasks only in the flat list; subtasks render when expanded.
       return sorted.filter((t) => t.parentId === "");
     },
-    [view, selectedProjectId, sortBy, sortDir],
+    // `filters` is a stable reference between store updates; list its fields so
+    // a mutation of any filter re-runs the live query.
+    [
+      view,
+      selectedProjectId,
+      sortBy,
+      sortDir,
+      searchQuery,
+      filters.status?.join(",") ?? "",
+      filters.priority?.join(",") ?? "",
+      filters.projectId ?? "",
+      filters.tagIds?.join(",") ?? "",
+    ],
   );
 }

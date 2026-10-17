@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { Project, Tag, Task } from "@/types";
+import type { Project, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
 
 export const DATABASE_NAME = "omivoid";
 
@@ -16,6 +16,8 @@ export class OmivoidDatabase extends Dexie {
   tasks!: Table<Task, string>;
   projects!: Table<Project, string>;
   tags!: Table<Tag, string>;
+  snapshots!: Table<SnapshotMeta, string>;
+  snapshotData!: Table<SnapshotData, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -37,6 +39,31 @@ export class OmivoidDatabase extends Dexie {
     this.version(3).stores({
       tasks:
         "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds",
+    });
+
+    // v4: `recurrence` replaces the "absent" value "" (no index needed). The
+    // indexes are unchanged, so the store string is repeated for clarity.
+    this.version(4)
+      .stores({
+        tasks:
+          "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds",
+      })
+      .upgrade((tx) =>
+        tx
+          .table("tasks")
+          .toCollection()
+          .modify((task: Task & { recurrence?: string }) => {
+            if (task.recurrence === undefined) task.recurrence = "";
+          }),
+      );
+
+    // v5: rolling local backups. Metadata and payload live in separate tables
+    // so listing backups never loads the (potentially large) task arrays.
+    this.version(5).stores({
+      tasks:
+        "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds",
+      snapshots: "id, createdAt",
+      snapshotData: "id",
     });
   }
 }

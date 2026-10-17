@@ -11,6 +11,14 @@ export type TaskStatus = "todo" | "in_progress" | "done";
 
 export type TaskPriority = "none" | "low" | "medium" | "high";
 
+export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "yearly";
+
+/** A repeating schedule; `interval` is how many `freq` units between repeats. */
+export interface RecurrenceRule {
+  freq: RecurrenceFreq;
+  interval: number;
+}
+
 /** Smart views (list scopes) shared by the store, queries and UI. */
 export type SmartView =
   | "inbox"
@@ -34,6 +42,11 @@ export interface Task {
   tagIds: string[];
   /** Epoch ms; 0 when the task has no due date. */
   dueAt: number;
+  /**
+   * "" when the task does not repeat; otherwise a compact rule such as
+   * "weekly" or "daily:3" (see `src/lib/recurrence.ts`).
+   */
+  recurrence: string;
   /** Epoch ms; 0 when the task is not completed. */
   completedAt: number;
   /** Epoch ms; 0 when the task is not deleted (trash uses a real timestamp). */
@@ -64,4 +77,21 @@ export interface Tag {
   /** CSS color token/value; "" when unset. */
   color: string;
   createdAt: number;
+}
+
+/** Lightweight metadata for a rolling local backup (no payload). */
+export interface SnapshotMeta {
+  id: string;
+  createdAt: number;
+  taskCount: number;
+  projectCount: number;
+  tagCount: number;
+}
+
+/** The payload of a rolling local backup (kept in a separate table). */
+export interface SnapshotData {
+  id: string;
+  tasks: Task[];
+  projects: Project[];
+  tags: Tag[];
 }

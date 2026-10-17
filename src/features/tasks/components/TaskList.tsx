@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTasksForView } from "@/features/views/useTasksForView";
+import { useProjects } from "@/features/projects/useProjects";
+import { useTags } from "@/features/tags/useTags";
 import { TaskRow } from "./TaskRow";
 import { TaskEditDialog, type TaskEditTarget } from "./TaskEditDialog";
 import {
@@ -14,26 +16,39 @@ import {
   trashTask,
 } from "@/db/taskRepository";
 import { queryParentIdsWithChildren, querySubtasksByParent } from "@/db/taskQueries";
-import { useTags } from "@/features/tags/useTags";
 import useAppStore from "@/store/appStore";
 import { toUserMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n";
+import {
+  groupTasks,
+  type GroupLabelResolver,
+} from "@/lib/taskFilters";
 import type { Task } from "@/types";
 
-interface FlatRow {
-  task: Task;
-  depth: number;
-  hasChildren: boolean;
-  isExpanded: boolean;
-}
+type FlatRow =
+  | { kind: "header"; id: string; label: string }
+  | {
+      kind: "task";
+      id: string;
+      task: Task;
+      depth: number;
+      hasChildren: boolean;
+      isExpanded: boolean;
+    };
+
+const ROW_HEIGHT = 44;
+const HEADER_HEIGHT = 34;
 
 export function TaskList() {
   const view = useAppStore((s) => s.activeView);
   const sortBy = useAppStore((s) => s.sortBy);
+  const groupBy = useAppStore((s) => s.groupBy);
   const expandedTaskIds = useAppStore((s) => s.expandedTaskIds);
   const toggleTaskExpanded = useAppStore((s) => s.toggleTaskExpanded);
+  const setDetailTaskId = useAppStore((s) => s.setDetailTaskId);
 
   const tasks = useTasksForView();
+  const projects = useProjects();
   const tags = useTags();
   const parentRef = useRef<HTMLDivElement>(null);
   const [dialogTarget, setDialogTarget] = useState<TaskEditTarget | null>(null);
@@ -54,34 +69,79 @@ export function TaskList() {
     new Map<string, Task[]>(),
   );
 
+  const groups = useMemo(() => {
+    if (!tasks || groupBy === "none") return null;
+    const projectNames = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
+    const tagNames = new Map(tags?.map((tag) => [tag.id, tag.name]) ?? []);
+    const labels: GroupLabelResolver = {
+      project: (id) => projectNames.get(id) ?? t("groupNoProject"),
+      tag: (id) => tagNames.get(id) ?? t("groupNoTag"),
+      date: {
+        overdue: t("dateOverdue"),
+        today: t("dateToday"),
+        tomorrow: t("dateTomorrow"),
+        thisWeek: t("dateThisWeek"),
+        later: t("dateLater"),
+        noDue: t("dateNoDue"),
+      },
+    };
+    return groupTasks(tasks, groupBy, labels);
+  }, [tasks, groupBy, projects, tags]);
+
   const rows = useMemo<FlatRow[]>(() => {
     if (!tasks) return [];
     const out: FlatRow[] = [];
-    const pushChildren = (parentId: string, depth: number) => {
+
+    function pushChildren(parentId: string, depth: number) {
       for (const child of subtasksByParent.get(parentId) ?? []) {
         const childHasChildren = parentIdsWithChildren.has(child.id);
         const childExpanded = childHasChildren && expandedTaskIds.has(child.id);
-        out.push({ task: child, depth, hasChildren: childHasChildren, isExpanded: childExpanded });
+        out.push({
+          kind: "task",
+          id: child.id,
+          task: child,
+          depth,
+          hasChildren: childHasChildren,
+          isExpanded: childExpanded,
+        });
         if (childExpanded) pushChildren(child.id, depth + 1);
       }
-    };
-    for (const task of tasks) {
+    }
+
+    function pushTask(task: Task) {
       const hasChildren = parentIdsWithChildren.has(task.id);
       const isExpanded = hasChildren && expandedTaskIds.has(task.id);
-      out.push({ task, depth: 0, hasChildren, isExpanded });
+      out.push({ kind: "task", id: task.id, task, depth: 0, hasChildren, isExpanded });
       if (isExpanded) pushChildren(task.id, 1);
     }
+
+    if (groups) {
+      for (const group of groups) {
+        out.push({ kind: "header", id: `header:${group.key}`, label: group.label });
+        for (const task of group.tasks) pushTask(task);
+      }
+    } else {
+      for (const task of tasks) pushTask(task);
+    }
     return out;
-  }, [tasks, parentIdsWithChildren, expandedTaskIds, subtasksByParent]);
+  }, [tasks, groups, parentIdsWithChildren, expandedTaskIds, subtasksByParent]);
+
+  const taskById = useMemo(() => {
+    const map = new Map<string, Task>();
+    for (const row of rows) {
+      if (row.kind === "task") map.set(row.task.id, row.task);
+    }
+    return map;
+  }, [rows]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 44,
+    estimateSize: (index) => (rows[index]?.kind === "header" ? HEADER_HEIGHT : ROW_HEIGHT),
     overscan: 10,
   });
 
-  const canReorder = sortBy === "order" && view !== "trash";
+  const canReorder = sortBy === "order" && view !== "trash" && groupBy === "none";
 
   function handleDragStart(task: Task) {
     draggedIdRef.current = task.id;
@@ -99,8 +159,8 @@ export function TaskList() {
     setDragOverId(null);
     draggedIdRef.current = null;
     if (!draggedId || draggedId === targetId) return;
-    const target = rows.find((r) => r.task.id === targetId)?.task;
-    const dragged = rows.find((r) => r.task.id === draggedId)?.task;
+    const target = taskById.get(targetId);
+    const dragged = taskById.get(draggedId);
     if (!target || !dragged || target.parentId !== dragged.parentId) return;
     try {
       await moveTask(draggedId, { afterId: targetId });
@@ -154,20 +214,27 @@ export function TaskList() {
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
             if (!row) return null;
+            const positionStyle = {
+              position: "absolute" as const,
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${item.start}px)`,
+            };
+            if (row.kind === "header") {
+              return (
+                <div key={row.id} style={positionStyle} className="flex h-[34px] items-center px-2">
+                  <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                    {row.label}
+                  </span>
+                </div>
+              );
+            }
             const rowTags = row.task.tagIds
               .map((id) => tagById.get(id))
               .filter((tag) => tag !== undefined);
             return (
-              <div
-                key={row.task.id}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${item.start}px)`,
-                }}
-              >
+              <div key={row.id} style={positionStyle}>
                 <TaskRow
                   task={row.task}
                   depth={row.depth}
@@ -191,6 +258,7 @@ export function TaskList() {
                   onToggleComplete={() =>
                     void setTaskCompleted(row.task.id, row.task.status !== "done").catch(toUserMessage)
                   }
+                  onOpenDetail={() => setDetailTaskId(row.task.id)}
                   onEdit={() => openEdit(row.task)}
                   onAddSubtask={() => openAddSubtask(row.task)}
                   onTrash={() => void trashTask(row.task.id).catch(toUserMessage)}

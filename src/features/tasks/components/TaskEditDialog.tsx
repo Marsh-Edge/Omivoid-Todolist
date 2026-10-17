@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { createTask, updateTask } from "@/db/taskRepository";
 import { useProjects } from "@/features/projects/useProjects";
 import { toUserMessage } from "@/lib/errors";
-import { t } from "@/lib/i18n";
+import { recurrenceLabel, t, type MessageKey } from "@/lib/i18n";
 import type { Task, TaskPriority, TaskStatus } from "@/types";
 
 export interface TaskEditTarget {
@@ -25,6 +25,17 @@ export interface TaskEditTarget {
 
 const priorities: readonly TaskPriority[] = ["none", "low", "medium", "high"];
 const statuses: readonly TaskStatus[] = ["todo", "in_progress", "done"];
+
+/** Interval-1 presets only; intervals ("every 3 days") come from quick-add. */
+const recurrences = ["", "daily", "weekly", "monthly", "yearly"] as const;
+
+const recurrenceLabelKeys: Record<(typeof recurrences)[number], MessageKey> = {
+  "": "recurrenceNone",
+  daily: "recurrenceDaily",
+  weekly: "recurrenceWeekly",
+  monthly: "recurrenceMonthly",
+  yearly: "recurrenceYearly",
+};
 
 function toLocalInput(ms: number): string {
   if (ms <= 0) return "";
@@ -47,6 +58,7 @@ export function TaskEditDialog({
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [dueLocal, setDueLocal] = useState("");
+  const [recurrence, setRecurrence] = useState("");
   const [projectId, setProjectId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -59,6 +71,7 @@ export function TaskEditDialog({
         setPriority(target.task.priority);
         setStatus(target.task.status);
         setDueLocal(toLocalInput(target.task.dueAt));
+        setRecurrence(target.task.recurrence);
         setProjectId(target.task.projectId);
         setError(null);
       } else {
@@ -66,6 +79,7 @@ export function TaskEditDialog({
         setPriority("none");
         setStatus("todo");
         setDueLocal("");
+        setRecurrence("");
         setProjectId("");
         setError(null);
       }
@@ -89,6 +103,7 @@ export function TaskEditDialog({
           priority,
           status,
           dueAt: Number.isFinite(dueAt) ? dueAt : 0,
+          recurrence,
           projectId,
         });
       } else {
@@ -97,6 +112,7 @@ export function TaskEditDialog({
           priority,
           status,
           dueAt: Number.isFinite(dueAt) ? dueAt : 0,
+          recurrence,
           projectId,
           parentId: target?.parentId ?? "",
         });
@@ -110,6 +126,17 @@ export function TaskEditDialog({
   }
 
   const isSubtask = Boolean(target?.parentId);
+
+  // Keep a non-preset rule (e.g. "weekly:2" from quick-add) selectable.
+  const recurrenceOptions: string[] = (recurrences as readonly string[]).includes(recurrence)
+    ? [...recurrences]
+    : [...recurrences, recurrence];
+
+  function recurrenceOptionLabel(value: string): string {
+    return value in recurrenceLabelKeys
+      ? t(recurrenceLabelKeys[value as keyof typeof recurrenceLabelKeys])
+      : recurrenceLabel(value);
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -196,6 +223,24 @@ export function TaskEditDialog({
                 onChange={(e) => setDueLocal(e.target.value)}
                 className="text-sm"
               />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="task-recurrence" className="text-xs font-medium">
+                {t("recurrenceLabel")}
+              </label>
+              <select
+                id="task-recurrence"
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value)}
+                className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {recurrenceOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {recurrenceOptionLabel(value)}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {!isSubtask ? (

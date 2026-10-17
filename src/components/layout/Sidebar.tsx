@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Calendar,
   CheckCircle2,
   Circle,
@@ -57,6 +60,14 @@ export function Sidebar() {
   const setFilters = useAppStore((s) => s.setFilters);
   const projects = useProjects();
   const tags = useTags();
+  const pathname = usePathname();
+  const router = useRouter();
+  const onStats = pathname === "/stats";
+
+  /** Leaving the statistics route (or any other route) returns to the task view. */
+  function goHome() {
+    if (pathname !== "/") router.push("/");
+  }
 
   const [showProjectInput, setShowProjectInput] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -111,19 +122,34 @@ export function Sidebar() {
             key={id}
             type="button"
             onClick={() => {
+              goHome();
               setActiveView(id);
               setSelectedProjectId(null);
               // Clear search when switching views (explicit behavior: filters persist unless cleared).
             }}
             className={cn(
               "hover:bg-accent focus-visible:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none",
-              activeView === id && selectedProjectId === null && "bg-accent font-medium",
+              !onStats &&
+                activeView === id &&
+                selectedProjectId === null &&
+                "bg-accent font-medium",
             )}
           >
             <Icon className="size-4" aria-hidden="true" />
             {t(labelKey)}
           </button>
         ))}
+
+        <Link
+          href="/stats"
+          className={cn(
+            "hover:bg-accent focus-visible:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none",
+            onStats && "bg-accent font-medium",
+          )}
+        >
+          <BarChart3 className="size-4" aria-hidden="true" />
+          {t("navStatistics")}
+        </Link>
       </nav>
 
       <section className="mt-5" aria-label={t("projects")}>
@@ -167,6 +193,7 @@ export function Sidebar() {
                 key={p.id}
                 type="button"
                 onClick={() => {
+                  goHome();
                   setSelectedProjectId(p.id);
                   setActiveView("inbox");
                 }}

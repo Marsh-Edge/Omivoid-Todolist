@@ -2,6 +2,7 @@ import Dexie from "dexie";
 import { getDb } from "./index";
 import { NONE } from "./taskRepository";
 import { matchesView } from "@/lib/viewPredicates";
+import { applyTaskSearchAndFilters, type TaskFilterCriteria } from "@/lib/taskFilters";
 import { startOfDay, endOfDay } from "date-fns";
 import type { SmartView, Task } from "@/types";
 
@@ -16,10 +17,20 @@ import type { SmartView, Task } from "@/types";
  * The UI never calls Dexie directly — hooks in `src/features` call these.
  */
 
-/** Tasks matching a smart view (optionally scoped to a project), index-ordered. */
+/**
+ * Tasks matching a smart view (optionally scoped to a project), index-ordered.
+ *
+ * `search` and `filters` are applied *after* the index query has narrowed the
+ * candidate set, so text search never scans the whole table.
+ */
 export async function queryTasksForView(
   view: SmartView,
-  opts: { projectId?: string; nowMs?: number } = {},
+  opts: {
+    projectId?: string;
+    nowMs?: number;
+    search?: string;
+    filters?: TaskFilterCriteria;
+  } = {},
 ): Promise<Task[]> {
   const db = getDb();
   const nowMs = opts.nowMs ?? Date.now();
@@ -76,7 +87,8 @@ export async function queryTasksForView(
     }
   }
 
-  return tasks.filter((t) => matchesView(t, view, nowMs));
+  const inView = tasks.filter((t) => matchesView(t, view, nowMs));
+  return applyTaskSearchAndFilters(inView, opts.search ?? "", opts.filters ?? {});
 }
 
 /** Direct active subtasks of `parentId`, index-ordered (`[parentId+order]`). */

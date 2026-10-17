@@ -7,10 +7,26 @@ import {
   type TaskCreateInput,
   type TaskUpdateInput,
 } from "./schemas";
-import type { Task } from "@/types";
+import { recordHistory, taskRow, type RowChange } from "./history";
+import { nextDueDate, parseRecurrence } from "@/lib/recurrence";
+import type { Task, TaskStatus } from "@/types";
 
 /** Sentinel for "no value" on indexed timestamp/reference fields. */
 export const NONE = 0;
+
+/** Options accepted by mutating repository calls. */
+export interface MutationOptions {
+  /**
+   * Set to false to skip the undo/redo history entry (e.g. debounced note
+   * autosave, which would otherwise flood the stack).
+   */
+  recordHistory?: boolean;
+}
+
+function recordRows(label: string, changes: RowChange[], options?: MutationOptions): void {
+  if (options?.recordHistory === false) return;
+  recordHistory({ label, changes });
+}
 
 function now(): number {
   return Date.now();
@@ -20,7 +36,10 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
-export async function createTask(input: TaskCreateInput): Promise<Task> {
+export async function createTask(
+  input: TaskCreateInput,
+  options?: MutationOptions,
+): Promise<Task> {
   const parsed = taskCreateInputSchema.parse(input);
   const timestamp = now();
 
@@ -44,6 +63,7 @@ export async function createTask(input: TaskCreateInput): Promise<Task> {
     parentId: parsed.parentId ?? "",
     tagIds: parsed.tagIds ?? [],
     dueAt: parsed.dueAt ?? NONE,
+    recurrence: parsed.recurrence ?? "",
     completedAt: NONE,
     deletedAt: NONE,
     order: timestamp,
@@ -52,6 +72,7 @@ export async function createTask(input: TaskCreateInput): Promise<Task> {
   } satisfies Task);
 
   await getDb().tasks.add(task);
+  recordRows("undoCreateTask", [taskRow(null, task)], options);
   return task;
 }
 
@@ -77,6 +98,7 @@ export async function countActiveTasks(): Promise<number> {
 export async function updateTask(
   id: string,
   patch: TaskUpdateInput,
+  options?: MutationOptions,
 ): Promise<Task> {
   const parsed = taskUpdateInputSchema.parse(patch);
   const db = getDb();
@@ -96,6 +118,48 @@ export async function updateTask(
     } satisfies Task);
 
     await db.tasks.put(next);
+    recordRows("undoEditTask", [taskRow(existing, next)], options);
+    return next;
+  });
+}
+
+/**
+ * Changes a task's status in one transaction.
+ *
+ * Completing a *recurring* task does not mark it done: its due date advances
+ * to the next occurrence and it stays active, so it reappears on schedule.
+ * Every other transition just stamps `completedAt` (or clears it).
+ */
+export async function setTaskStatus(id: string, status: TaskStatus): Promise<Task> {
+  const db = getDb();
+  return db.transaction("rw", db.tasks, async () => {
+    const existing = await db.tasks.get(id);
+    if (!existing) {
+      throw new Error(`Task not found: ${id}`);
+    }
+
+    const rule = parseRecurrence(existing.recurrence);
+    if (status === "done" && rule) {
+      const next = taskSchema.parse({
+        ...existing,
+        dueAt: nextDueDate(existing.dueAt, rule, now()),
+        status: "todo",
+        completedAt: NONE,
+        updatedAt: now(),
+      } satisfies Task);
+      await db.tasks.put(next);
+      recordRows("undoEditTask", [taskRow(existing, next)]);
+      return next;
+    }
+
+    const next = taskSchema.parse({
+      ...existing,
+      status,
+      completedAt: status === "done" ? now() : NONE,
+      updatedAt: now(),
+    } satisfies Task);
+    await db.tasks.put(next);
+    recordRows("undoEditTask", [taskRow(existing, next)]);
     return next;
   });
 }
@@ -104,10 +168,7 @@ export async function setTaskCompleted(
   id: string,
   completed: boolean,
 ): Promise<Task> {
-  return updateTask(id, {
-    status: completed ? "done" : "todo",
-    completedAt: completed ? now() : NONE,
-  });
+  return setTaskStatus(id, completed ? "done" : "todo");
 }
 
 /** Trash: soft-delete, restorable. Cascades to all descendants. */
@@ -116,6 +177,7 @@ export async function trashTask(id: string): Promise<Task> {
   return db.transaction("rw", db.tasks, async () => {
     const ts = now();
     const ids = [id, ...(await collectDescendantIds(id, true))];
+    const before = await db.tasks.where("id").anyOf(ids).toArray();
     await db.tasks
       .where("id")
       .anyOf(ids)
@@ -124,6 +186,10 @@ export async function trashTask(id: string): Promise<Task> {
     if (!task) {
       throw new Error(`Task not found: ${id}`);
     }
+    recordRows(
+      "undoTrashTask",
+      before.map((row) => taskRow(row, { ...row, deletedAt: ts, updatedAt: ts })),
+    );
     return task;
   });
 }
@@ -141,12 +207,16 @@ export async function restoreTask(id: string): Promise<Task> {
     }
     const ts = task.deletedAt;
     const ids = [id, ...(await collectDescendantIds(id))];
+    const changes: RowChange[] = [];
     for (const descendantId of ids) {
       const row = await db.tasks.get(descendantId);
       if (row && (row.deletedAt === ts || row.id === id)) {
-        await db.tasks.put(taskSchema.parse({ ...row, deletedAt: NONE, updatedAt: now() } satisfies Task));
+        const restored = taskSchema.parse({ ...row, deletedAt: NONE, updatedAt: now() } satisfies Task);
+        await db.tasks.put(restored);
+        changes.push(taskRow(row, restored));
       }
     }
+    recordRows("undoRestoreTask", changes);
     return (await db.tasks.get(id)) as Task;
   });
 }
@@ -156,7 +226,9 @@ export async function deleteTaskPermanently(id: string): Promise<void> {
   const db = getDb();
   await db.transaction("rw", db.tasks, async () => {
     const ids = [id, ...(await collectDescendantIds(id))];
+    const rows = await db.tasks.where("id").anyOf(ids).toArray();
     await db.tasks.where("id").anyOf(ids).delete();
+    recordRows("undoDeleteTask", rows.map((row) => taskRow(row, null)));
   });
 }
 
@@ -189,6 +261,9 @@ export async function moveTask(
     const before = insertAt > 0 ? siblings[insertAt - 1] : undefined;
     const after = insertAt < siblings.length ? siblings[insertAt] : undefined;
 
+    const changes: RowChange[] = [];
+    const ts = now();
+
     let order: number;
     if (before && after) {
       order = (before.order + after.order) / 2;
@@ -197,10 +272,12 @@ export async function moveTask(
         const group = [...siblings];
         group.splice(insertAt, 0, task);
         for (let i = 0; i < group.length; i++) {
-          await db.tasks.put(
-            taskSchema.parse({ ...group[i], order: (i + 1) * 1000, updatedAt: now() } satisfies Task),
-          );
+          const current = group[i] as Task;
+          const updated = taskSchema.parse({ ...current, order: (i + 1) * 1000, updatedAt: ts } satisfies Task);
+          await db.tasks.put(updated);
+          changes.push(taskRow(current, updated));
         }
+        recordRows("undoMoveTask", changes);
         return;
       }
     } else if (before) {
@@ -210,7 +287,9 @@ export async function moveTask(
     } else {
       order = now();
     }
-    await db.tasks.put(taskSchema.parse({ ...task, order, updatedAt: now() } satisfies Task));
+    const moved = taskSchema.parse({ ...task, order, updatedAt: ts } satisfies Task);
+    await db.tasks.put(moved);
+    recordRows("undoMoveTask", [taskRow(task, moved)]);
   });
 }
 
@@ -237,10 +316,15 @@ export async function reorderTasks(
   if (updates.length === 0) return;
   const db = getDb();
   await db.transaction("rw", db.tasks, async () => {
+    const changes: RowChange[] = [];
+    const ts = now();
     for (const { id, order } of updates) {
       const existing = await db.tasks.get(id);
       if (!existing) continue;
-      await db.tasks.put(taskSchema.parse({ ...existing, order, updatedAt: now() } satisfies Task));
+      const updated = taskSchema.parse({ ...existing, order, updatedAt: ts } satisfies Task);
+      await db.tasks.put(updated);
+      changes.push(taskRow(existing, updated));
     }
+    recordRows("undoMoveTask", changes);
   });
 }

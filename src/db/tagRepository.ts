@@ -1,5 +1,6 @@
 import { getDb } from "./index";
 import { tagSchema } from "./schemas";
+import { recordHistory, tagRow } from "./history";
 import type { Tag } from "@/types";
 
 function now(): number {
@@ -23,6 +24,7 @@ export async function createTag(input: { name: string; color?: string }): Promis
     createdAt: timestamp,
   } satisfies Tag);
   await getDb().tags.add(tag);
+  recordHistory({ label: "undoCreateTag", changes: [tagRow(null, tag)] });
   return tag;
 }
 
@@ -48,10 +50,18 @@ export async function updateTag(id: string, patch: Partial<Pick<Tag, "name" | "c
       createdAt: existing.createdAt,
     } satisfies Tag);
     await db.tags.put(next);
+    recordHistory({ label: "undoEditTag", changes: [tagRow(existing, next)] });
     return next;
   });
 }
 
 export async function deleteTag(id: string): Promise<void> {
-  await getDb().tags.delete(id);
+  const db = getDb();
+  await db.transaction("rw", db.tags, async () => {
+    const existing = await db.tags.get(id);
+    await db.tags.delete(id);
+    if (existing) {
+      recordHistory({ label: "undoDeleteTag", changes: [tagRow(existing, null)] });
+    }
+  });
 }

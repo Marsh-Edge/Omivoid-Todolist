@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { Project, Tag, Task } from "@/types";
+import { isValidRecurrence } from "@/lib/recurrence";
+import type { Project, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
 
 /**
  * Zod schemas are the single validation gate for everything entering
@@ -16,6 +17,12 @@ export const taskPrioritySchema = z.enum(["none", "low", "medium", "high"]);
 const idSchema = z.string().min(1);
 const timestampSchema = z.number().int().nonnegative();
 
+/** "" (never repeats) or a compact rule like "weekly" / "daily:3". */
+export const recurrenceSchema = z
+  .string()
+  .max(20)
+  .refine(isValidRecurrence, { message: "Invalid recurrence rule" });
+
 export const taskSchema: z.ZodType<Task> = z.object({
   id: idSchema,
   title: z.string().trim().min(1).max(500),
@@ -26,6 +33,7 @@ export const taskSchema: z.ZodType<Task> = z.object({
   parentId: z.string(),
   tagIds: z.array(idSchema).max(200),
   dueAt: timestampSchema,
+  recurrence: recurrenceSchema,
   completedAt: timestampSchema,
   deletedAt: timestampSchema,
   order: z.number(),
@@ -51,6 +59,21 @@ export const tagSchema: z.ZodType<Tag> = z.object({
   createdAt: timestampSchema,
 });
 
+export const snapshotMetaSchema: z.ZodType<SnapshotMeta> = z.object({
+  id: idSchema,
+  createdAt: timestampSchema,
+  taskCount: z.number().int().nonnegative(),
+  projectCount: z.number().int().nonnegative(),
+  tagCount: z.number().int().nonnegative(),
+});
+
+export const snapshotDataSchema: z.ZodType<SnapshotData> = z.object({
+  id: idSchema,
+  tasks: z.array(taskSchema),
+  projects: z.array(projectSchema),
+  tags: z.array(tagSchema),
+});
+
 export const taskCreateInputSchema = z.object({
   title: z.string().trim().min(1).max(500),
   notes: z.string().max(100_000).optional(),
@@ -60,6 +83,7 @@ export const taskCreateInputSchema = z.object({
   parentId: z.string().optional(),
   tagIds: z.array(idSchema).max(200).optional(),
   dueAt: timestampSchema.optional(),
+  recurrence: recurrenceSchema.optional(),
 });
 
 export const taskUpdateInputSchema = taskCreateInputSchema

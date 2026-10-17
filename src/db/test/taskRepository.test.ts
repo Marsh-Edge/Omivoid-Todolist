@@ -41,4 +41,18 @@ describe("taskRepository", () => {
     expect(updated.status).toBe("done");
     expect(updated.completedAt).toBeGreaterThan(0);
   });
+
+  it("stores the recurrence rule on create", async () => {
+    const t = await createTask({ title: "Weekly", recurrence: "weekly" });
+    expect(t.recurrence).toBe("weekly");
+  });
+
+  it("reschedules a recurring task instead of completing it", async () => {
+    const past = Date.now() - 5 * 24 * 60 * 60 * 1000;
+    const t = await createTask({ title: "Standup", dueAt: past, recurrence: "daily" });
+    const updated = await setTaskCompleted(t.id, true);
+    expect(updated.status).toBe("todo");
+    expect(updated.completedAt).toBe(0);
+    expect(updated.dueAt).toBeGreaterThan(Date.now());
+  });
 });

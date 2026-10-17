@@ -3,36 +3,41 @@
 Local-first Todo / task-management app. Next.js 16 (static export) + Dexie/IndexedDB + Electron.
 Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for approval after each phase.**
 
+> **Status honesty note (2026-10-17).** A previous round marked Phases 3–5 complete while
+> the features were only scaffolds or missing entirely (the "Phase 4 complete" commit
+> changed no files). This revision corrects the record, makes Phase 3 genuinely
+> functional, and re-scopes Phases 4–5 as *not started*.
+
 ## Phase status
 
 - [x] **Step 0** — AGENTS.md + PLAN.md
 - [x] **Phase 1** — Foundation + Electron proof (no real features)
 - [x] **Phase 2** — Tier 1 core: tasks, subtasks, projects, tags, smart views
-- [x] **Phase 3** — Tier 1 rest: search, filters, command palette, shortcuts, import/export, dark/light mode
-- [x] **Phase 4** — Tier 2 features, in small groups (STOP after each group)
-- [x] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests
+- [x] **Phase 3** — Tier 1 rest: search, filters, group-by, command palette, shortcuts, import/export, dark/light mode
+- [ ] **Phase 4** — Tier 2 features, in small groups (STOP after each group) — **in progress (Groups 1–6 done)**
+- [ ] **Phase 5** — Tier 3 (only if performance budget allows), polish, animations, performance audit, tests — **not started**
 
 ## Phase 1 — Foundation + Electron proof
 
 Pass condition:
 1. `npm run build` works → static export in `out/`
-2. `npm run electron:dev` builds, compiles the Electron shell, and opens the desktop window
+2. `npm run electron:compile` / `npm run electron:dev` compile the Electron shell and open the desktop window
 3. Data written through the test screen **survives a full app quit + relaunch** (IndexedDB persistence proof)
 
-Deliverables:
-- Static export config; `src/` folder structure; Tailwind v4 + shadcn/ui (`button`, `input` only)
+Deliverables (done):
+- Static export config; `src/` folder structure; Tailwind v4 + shadcn/ui
 - Space Grotesk vendored as woff2 via `next/font/local` (no network at build or runtime)
-- Dexie schema **v1** with full indexes + migration stub; Zod-validated repository layer
-- Tiny test screen: add / list (live query) / complete / delete a task
+- Dexie schema **v1** with full indexes + migration stubs (v2, v3); Zod-validated repository layer
+- Quick-add / list (live query) / complete / delete a task
 - Electron shell: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, minimal preload;
-  production serves `out/` from a loopback-only local static server (stable origin for IndexedDB)
+  production serves `out/` from a loopback-only local static server (`127.0.0.1:41739`)
 - `electron-builder.yml` wired (win nsis + linux AppImage)
 
-Scripts: `dev` (web HMR), `build`, `lint`, `electron:compile`, `electron:dev` (static-build mode:
+Scripts: `dev` (web HMR), `build`, `lint`, `test`, `electron:compile`, `electron:dev` (static-build mode:
 `next build` → `tsc` → `electron .`), `electron:build` (`… && electron-builder --win`).
 > Renderer tweaks require re-running `electron:dev`; use `npm run dev` for fast web iteration.
 
-## Phase 2 — Tier 1 core
+## Phase 2 — Tier 1 core (done)
 
 - Task CRUD with subtasks (nested, collapsible), drag & drop reorder
 - Priority, due date/time, status (Todo / In Progress / Done), tags with colors
@@ -41,24 +46,159 @@ Scripts: `dev` (web HMR), `build`, `lint`, `electron:compile`, `electron:dev` (s
 - Zustand store (selector-based), virtualized lists (`@tanstack/react-virtual`)
 - Vitest scaffold + DB-layer tests (fake-indexeddb)
 
-## Phase 3 — Tier 1 rest
+## Phase 3 — Tier 1 rest (done — this revision)
 
-- Instant local search; filters / sort / group-by
-- Command palette (Ctrl/Cmd+K), keyboard shortcuts
-- Export / import all data as JSON (Zod-validated, friendly errors + toasts)
-- Dark/light mode: manual switch or follow system
+- **Instant local search** over title + notes, applied *after* the index-backed view query
+  (never a full-table scan) — `src/lib/taskFilters.ts`, wired through `queryTasksForView`
+- **Filters** (status, priority, project, tag OR-match); sidebar tag chips now actually filter
+- **Sort / group-by** (project, date buckets, first tag) rendered as virtualized group headers
+- **Command palette** (`Ctrl/Cmd+K`) with view navigation, add task, theme, import/export, clear search
+- **Keyboard shortcuts** (`Ctrl/Cmd+K`, `Ctrl/Cmd+F`, `Ctrl/Cmd+N`) — `src/hooks/useGlobalShortcuts.ts`
+- **Export / import all data as JSON** (Zod-validated, version-tagged, friendly errors + toasts) —
+  `src/db/backupRepository.ts`, `src/features/data/backupActions.ts`
+- **Dark / light / system theme** with a header toggle (persisted in `localStorage`)
+- Lightweight toast system (`src/store/toastStore.ts`, `src/components/ui/toaster.tsx`)
 
-## Phase 4 — Tier 2 (small groups, STOP after each group)
+## Phase 4 — Tier 2 (small groups, STOP after each group) — IN PROGRESS
 
-1. Markdown notes per task (lazy-loaded, live preview) + wiki-style `[[links]]` with backlinks panel
-2. Kanban board + Calendar views (lazy-loaded)
-3. Quick-add with natural-language parsing (tested)
-4. Recurring tasks (tested) + Electron desktop notifications
-5. Undo/redo + rolling local backups
-6. Statistics page with lightweight charts (lazy-loaded)
-7. Desktop extras: tray, global quick-add shortcut, window size/position memory, single-instance lock
+- [x] **Group 1** — Markdown notes per task (lazy-loaded, live preview) + wiki-style `[[links]]` with backlinks panel
+- [x] **Group 2** — Kanban board + Calendar views (lazy-loaded)
+- [x] **Group 3** — Quick-add with natural-language parsing (tested)
+- [x] **Group 4** — Recurring tasks (tested) + Electron desktop notifications
+- [x] **Group 5** — Undo/redo + rolling local backups (tested)
+- [x] **Group 6** — Statistics page with lightweight charts (lazy-loaded, tested)
+- [ ] **Group 7** — Desktop extras: tray, global quick-add shortcut, window size/position memory, single-instance lock
 
-## Phase 5 — Tier 3 + polish (only if performance budget allows)
+### Group 1 — delivered
+
+- **Task detail panel** (right side, `src/features/tasks/components/TaskDetailPanel.tsx`): opens from a
+  task title; shows meta, notes and backlinks. The pencil icon still opens the metadata dialog.
+- **Markdown notes editor** (`src/features/notes/components/NotesEditor.tsx`): Edit / Preview / Split,
+  debounced autosave (500 ms) + save-on-blur, inline "Insert link" task picker.
+- **Lazy preview** (`MarkdownPreview.tsx` via `next/dynamic`, `ssr: false`): `react-markdown` +
+  `remark-gfm` stay in a **separate 144 KB chunk** — the initial bundle is unchanged (957 KB).
+- **Wiki links** (`src/lib/wikiLinks.ts`, 10 unit tests): `[[Title]]` resolved by trimmed,
+  case-insensitive title match; unresolved links stay literal. Preview intercepts internal links to
+  open the target; external URLs are rendered inert (local-only guarantee).
+- **Backlinks** (`src/features/notes/useTaskNoteReferences.ts`): computed on demand while the panel is
+  open; no DB migration (the `notes` column already existed).
+
+Known limitations (deferred): links break on title rename; duplicate titles resolve to the first
+match; backlink resolution reads the active-task set while the panel is open (an indexed links table
+is the planned follow-up if profiling at 10k tasks demands it).
+
+### Group 2 — delivered
+
+- **View-mode switch** in the view header (`List` / `Board` / `Calendar`) backed by `viewMode` in the
+  store — `src/components/views/TaskView.tsx`. List keeps the readable `max-w-3xl`; board/calendar go
+  full width.
+- **Kanban board** (`src/features/board/components/`, lazy chunk ~5 KB): three status columns
+  (To do / In progress / Done), each **individually virtualized** (`@tanstack/react-virtual`). Cards
+  show priority, due date, project and tag dots; clicking a card opens the notes panel; dragging a
+  card between columns changes its status (via the shared, recurrence-aware `setTaskStatus`). Pure
+  grouping helpers live in `src/lib/board.ts`.
+- **Month calendar** (`src/features/calendar/components/CalendarView.tsx`, lazy chunk ~4 KB): Sunday-
+  or Monday-start month grid with prev/next/Today controls, up to 3 task chips per day plus a
+  “+N more” overflow, today highlighted. Pure layout helpers in `src/lib/calendar.ts` (5 tests).
+- Both views **reuse `useTasksForView()`**, so they honor the active view, project scope, search and
+  filters — and add **no new DB queries or indexes**.
+
+Known limitations (deferred): board/calendar are scoped to the active view (the Done column fills in
+the Completed view, matching the list's “completing removes from active view” rule); the calendar
+shows only tasks with a due date (the rest are summarized); the board shows top-level tasks only.
+
+### Group 3 — delivered
+
+- **Natural-language quick-add** — `src/lib/naturalLanguage.ts`, a pure `parseQuickAdd(input, nowMs)`
+  that recognizes: priority flags (`!high !medium !low`, aliases `!h !m !l`), `#tags`, and a due
+  date/time (today/tomorrow/tonight, weekday names, “next week/month”, “in N days/weeks/months”,
+  `YYYY-MM-DD`, `M/D[/YYYY]`, “november 1”, and clock times `5pm`/`9:30am`/`17:00`/noon/midnight).
+  Recognized tokens are stripped from the title; unrecognized text is left untouched and the parser
+  never throws. **13 unit tests** cover every form.
+- **Live preview chips** in `TaskForm`: as you type, the detected due date, priority and tags appear
+  under the input (progressive disclosure — nothing shows when there's nothing to detect).
+- **Tag resolution**: `#tag` names are matched case-insensitively against existing tags and created
+  on submit if missing; a failing tag never blocks task creation.
+
+Known limitations (deferred): parsing is a deliberately small English subset (no ranges or “eod”); it
+runs on submit/typing rather than in a worker (inputs are short); project assignment still comes from
+the selected project, not an `@project` token.
+
+### Group 4 — delivered
+
+- **Recurring tasks** — a flat `recurrence` string on `Task` (`"" `= never; `"weekly"`; `"daily:3"`),
+  validated by Zod and added via Dexie **schema v4** (migration backfills `""`). Pure rule logic lives
+  in `src/lib/recurrence.ts` (`parseRecurrence`, `formatRecurrence`, `nextDueDate`; **12 tests**).
+- **Completion reschedules** — `setTaskStatus` in `src/db/taskRepository.ts`: completing a recurring
+  task advances its `dueAt` to the next occurrence (preserving the original time of day, skipping past
+  a long overdue backlog) and leaves it active instead of marking it done. The list checkbox and the
+  board's drag-to-Done both go through it, so behavior is consistent everywhere.
+- **Recurrence UI** — a `Repeat` select in `TaskEditDialog` (Never / Daily / Weekly / Monthly / Yearly;
+  non-preset rules such as `weekly:2` stay selectable), a `Repeat` indicator + accessible label on
+  `TaskRow`, and a live “Repeats …” chip in the quick-add preview.
+- **Natural language** — `parseQuickAdd` now understands `daily/weekly/monthly/yearly`, `every
+  day/week/month/year`, and `every N units` → `recurrence` (**+4 tests**, 17 total for the parser).
+- **Desktop notifications** — `src/features/notifications/useDueNotifications.ts` (mounted in
+  `MainLayout`) polls once a minute and fires an OS notification the first time a task's due time
+  passes, for tasks overdue within a 3-day window. Uses the Web `Notification` API (Electron grants it
+  by default, so the preload stays minimal); the pure selection is `src/lib/dueNotifications.ts`
+  (**8 tests**). Announcements are deduped per `occurrence` in `localStorage`; a command-palette action
+  toggles reminders on/off (preference in `src/lib/notificationPrefs.ts`).
+
+Known limitations (deferred): intervals come only from quick-add (`every 3 days`), not the edit dialog;
+`nextDueDate` uses date-fns month clamping (Jan 31 → Feb 28); reminders fire on the next poll after the
+due time (up to ~60 s late) and are a fixed 3-day look-back; no per-task reminder lead-time or snooze.
+
+### Group 5 — delivered
+
+- **Undo/redo** — a bounded in-memory history (max 100 actions). Every mutating repository call
+  (task/project/tag create, edit, status change, trash, restore, permanent delete, move, reorder)
+  records a `RowChange` per affected row (before/after image) via `src/db/history.ts`; cascade
+  operations (e.g. trashing a parent + descendants) undo as **one step** because images are stored, not
+  inverse ops. The pure stack math is `src/lib/undoStack.ts` (**10 tests**); the DB bridge is
+  `src/db/history.ts` (**9 tests**). React subscribes with `useSyncExternalStore`
+  (`src/features/history/useHistory.ts`) — no coupling from the DB layer to Zustand.
+- **UI** — Undo/Redo buttons in the header (disabled when empty, tooltips name the action) and
+  `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl/Cmd+Y` shortcuts plus palette actions. Shortcuts are ignored
+  inside text fields so native in-field undo still works. Note autosave is **excluded** from history
+  (`updateTask(..., { recordHistory: false })`) so a typing session can't flood the stack.
+- **Rolling local backups** — `src/db/snapshotRepository.ts` keeps the **5 newest** snapshots
+  (`maybeCreateSnapshot` takes one per app start when the newest is >6 h old, skipping an empty DB).
+  Metadata and payload live in separate tables (`snapshots`, `snapshotData`) added via Dexie **schema
+  v5**, so listing backups never loads task arrays; the prune/interval rules are pure and tested
+  (`src/lib/snapshots.ts`, **9 tests**; repo **7 tests**). The dialog lists backups (date + counts),
+  offers “Back up now”, restore (with confirm) and delete.
+- **Safety** — restoring a backup or importing a JSON file **clears history** first, since prior undo
+  entries would reference rows that no longer exist.
+
+Known limitations (deferred): history is in-memory only (cleared on app restart); undo applies whole-row
+images, so it can overwrite a row changed by another path since (acceptable for a single-user local
+app); snapshots are not encrypted and live in the same IndexedDB origin as the live data.
+
+### Group 6 — delivered
+
+- **Statistics page** at the `/stats` route, reached from a new sidebar entry and a command-palette
+  action. The task view and the dashboard now share a client **route-group layout**
+  (`src/app/(app)/layout.tsx`), so `MainLayout` (header, sidebar, dialogs, notification/snapshot hooks)
+  stays mounted across navigation instead of remounting. The dashboard itself is `next/dynamic`
+  (`ssr: false`) and its own route, so **none of the chart code enters the initial bundle**.
+- **Hand-rolled charts, no dependency** — vertical bars (`BarChart`) and horizontal bar lists
+  (`BarList`) built from Tailwind tokens; each chart exposes a single `role="img"` with a text summary,
+  and values are always printed next to the bars so color is never the only signal.
+- **Metrics** (global — all non-trashed tasks, independent of the active view/filters): summary cards
+  (active, completed, overdue, due today, completion rate), a 30-day completions trend, status and
+  priority breakdowns, and top projects (incl. an Inbox bucket).
+- **Pure aggregation** in `src/lib/stats.ts` (`summarizeTasks`, `completionTrend`, `countByStatus`,
+  `countByPriority`, `topProjects`; **11 tests**) clock-injected and Dexie-free. The hook
+  (`src/features/stats/useStats.ts`) reads the existing `[deletedAt+order]` index via `listActiveTasks`
+  — **no new index or migration**.
+
+Known limitations (deferred): stats load all non-trashed tasks and aggregate in JS (same cost class as
+the list/board/calendar); `nowMs` is captured at mount, so overdue/due-today refresh on data change or
+re-navigation rather than at midnight; the trend window (30 days) and project limit (6) are constants,
+not user-adjustable.
+
+## Phase 5 — Tier 3 + polish (only if performance budget allows) — NOT STARTED
 
 - Graph view, Pomodoro timer, timeline-lite, saved filters, Markdown export (each optional)
 - Animations (CSS first), accessibility pass, performance audit at 10,000 tasks
@@ -71,6 +211,34 @@ Scripts: `dev` (web HMR), `build`, `lint`, `electron:compile`, `electron:dev` (s
 - Lazy-load: Markdown editor, graph, charts, calendar, command palette
 - Every common query must hit an IndexedDB index
 
+### Latest measurement (end of Phase 4 Group 6)
+
+| Milestone | Initial JS | Lazy JS | CSS |
+| --- | --- | --- | --- |
+| Baseline (before fixes) | 926 KB | — | 51 KB |
+| End of Phase 3 | 957 KB | — | 52 KB |
+| End of Phase 4 Group 1 | 957 KB | +158 KB (Markdown chunk) | 54 KB |
+| End of Phase 4 Group 2 | 963 KB | +9 KB (board + calendar) | 56 KB |
+| End of Phase 4 Group 3 | 969 KB | +9 KB (board + calendar) | 56 KB |
+| End of Phase 4 Group 4 | 975 KB | +9 KB (board + calendar) | 56 KB |
+| End of Phase 4 Group 5 | 986 KB | +9 KB (board + calendar) | 56 KB |
+| End of Phase 4 Group 6 | **997 KB** | + board + calendar + **stats route** | **58 KB** |
+
+Group 3 adds the parser and the live preview chips to the initial bundle (+6 KB) — it must be
+available the moment the quick-add field renders, so it isn't lazy. Group 4 adds the recurrence
+rules + notifications hook eagerly (+6 KB); it reuses `date-fns` (already present); no new
+dependencies. Group 5 adds undo/redo (stack + header buttons + shortcuts) and the backups dialog to
+the initial bundle (+11 KB); no new dependencies (reuses `date-fns` for formatting). Group 6 adds
+`next/link` + the Next client router (route-based navigation) and the sidebar entry (+11 KB); the
+dashboard and charts are a separate lazy route chunk. CSS grows ~2 KB because Tailwind emits the
+stats utility classes globally (no per-route CSS splitting for utilities). Board, calendar and stats
+remain lazy chunks.
+
+Search/filter note: substring text search cannot use an IndexedDB index by nature. It is applied
+to the *already index-narrowed* view result, so the candidate set is bounded by the view
+(Inbox = non-project active tasks, etc.). Revisit with a token/index table only if profiling at
+10k tasks shows it matters.
+
 ## Decisions log
 
 | Decision | Rationale |
@@ -79,4 +247,38 @@ Scripts: `dev` (web HMR), `build`, `lint`, `electron:compile`, `electron:dev` (s
 | Space Grotesk vendored woff2 in repo | Local-only rule; `next/font/local` gives preload + metric fallback, zero build-time fetches |
 | `electron:dev` = static-build mode (user choice) | Closest to production; `npm run dev` remains for fast web iteration |
 | Prod renderer served from `127.0.0.1` (not `file://`) | Stable origin required for reliable IndexedDB persistence |
-| No Vitest in Phase 1 | Keep phase minimal per spec; tests scaffold lands with the real DB layer in Phase 2 |
+| Search/filter applied post-index (not in the index) | Substring search is not indexable; the view query already narrows the set, keeping it bounded |
+| Backup replaces all data in one transaction | Simple, atomic, and Zod-validated; a failed import leaves existing data untouched |
+| Theme persisted in `localStorage`, not IndexedDB | Tiny UI setting; the rules explicitly allow `localStorage` for theme |
+| Keep `useVirtualizer` despite React Compiler lint warning | Known TanStack Virtual limitation; memoizing it would break virtualization |
+| Wiki links by **title** (not id) | Matches the "wiki-style" intent and reads naturally; duplicate/rename edge cases are documented and deferred |
+| Backlinks computed on demand (no links table yet) | Keeps Group 1 small with no migration; the panel only scans while open. Indexed links table is the planned follow-up if 10k-task profiling needs it |
+| External links rendered inert in the Markdown preview | The app is local-only — a clickable `http(s)` link would risk a network request |
+| Notes autosave debounced (500 ms) + save on blur | Feels instant without a save button or write on every keystroke |
+| Board uses native HTML5 drag & drop (no `@dnd-kit`) | Consistent with the list's existing DnD and the "minimal dependencies" rule; cross-column drops only need `dragover`/`drop` |
+| Board columns virtualized individually | A single column can hold thousands of cards at 10k tasks; per-column virtualizers keep it ~60fps |
+| Board/calendar reuse `useTasksForView()` | No new queries or indexes; they stay consistent with the active view, project scope, search and filters |
+| Board and calendar lazy-loaded | Matches the perf budget ("lazy-load … calendar"); initial JS grows only ~6 KB |
+| Task status write extracted to a module-level helper | React Compiler's purity rule rejects `Date.now()` inside a render-scoped function |
+| NL parsing is a hand-rolled regex/scan, not a dependency | Keeps the "minimal dependencies" rule; the subset is small enough to test exhaustively |
+| `parseQuickAdd` takes `nowMs` and returns plain data | Pure and clock-injectable, so the whole grammar is unit-testable |
+| Recurrence stored as a flat string (`"weekly"`, `"daily:3"`), not a nested object | Matches the schema's flat/sentinel style, needs no index, and is trivially Zod-validated |
+| Recurring tasks reschedule instead of completing | The expected "done for now, comes back" behavior; keeps one active row rather than spawning history |
+| `setTaskStatus` is the single completion path (list + board) | Guarantees recurring reschedule applies everywhere; removed the board's old `statusPatch` |
+| Reminders via the Web `Notification` API in the renderer, not IPC | Electron grants it by default; keeps the preload minimal (contextBridge only) and the app local-only |
+| Reminder dedupe keyed by `taskId → dueAt` in `localStorage` | `localStorage` is explicitly allowed for tiny UI state; the key auto-invalidates when a recurring task advances |
+| Reminder look-back window (3 days) | Prevents a notification flood for work that has sat overdue for weeks |
+| Parser runs only in change/submit handlers, preview stored in state | React Compiler's purity rule forbids `Date.now()` during render |
+| `#tags` are auto-created on submit | Matches the natural-language intent; failures are swallowed so a bad tag never blocks the task |
+| Undo stores full row **images** (before/after), not inverse operations | Cascades (trash, permanent delete, reorder) undo correctly with no per-operation special cases; memory is bounded by the 100-action cap |
+| History lives in `src/db/history.ts` (module singleton) + `useSyncExternalStore` | Keeps the "repository layer owns Dexie" rule; React subscribes without the DB importing Zustand (no cycle) |
+| Note autosave excluded from history (`recordHistory: false`) | A debounced per-keystroke write would flood the 100-entry stack and make undo useless |
+| History cleared after restore/import | Replaced rows make prior undo entries unsafe to apply; a stale image could resurrect deleted data |
+| Snapshots split into `snapshots` (meta) + `snapshotData` (payload) tables | Listing backups stays cheap (metadata only); the payload is loaded only on restore |
+| Rolling backups capped at 5, taken at most every ~6 h per app start | Bounds storage while still providing a safety net; automatic trigger avoids user effort |
+| `undo`/`redo`/shortcuts ignore editable fields | Preserves native `Ctrl+Z` text editing; app-level undo only acts on non-input focus |
+| Statistics is its own `/stats` route (not a view-mode) | Stats is global, while view modes describe the active view's tasks; a route also code-splits the charts cleanly |
+| Shared `MainLayout` moved into a route-group layout | Keeps header/sidebar/dialogs/hooks mounted across navigation instead of remounting per route |
+| Charts hand-rolled with SVG/Tailwind (no library) | Honors the minimal-dependency + local-only rules; fully theme-aware and small |
+| Stats aggregate in JS from the existing `[deletedAt+order]` read | Avoids a new `completedAt` index/migration; same cost class as the list/board/calendar |
+| Chart values always printed next to bars | Keeps the dashboard readable without relying on color/height alone (accessibility) |

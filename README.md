@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Omivoid
 
-## Getting Started
+A local-first Todo / task manager. Everything is stored on your device in
+IndexedDB — there are **no network requests, no accounts, and no telemetry**.
+Ships as a web static export and as a desktop app (Electron).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** with `output: 'export'` (static, client-only; no API routes/SSR)
+- **Dexie / IndexedDB** for storage, with **Zod**-validated repositories
+- **Zustand** (selector-based) for UI state
+- **Tailwind v4** + shadcn/ui, **lucide-react**, **Space Grotesk** (all bundled locally)
+- **Electron** shell with `contextIsolation`, `sandbox`, and a loopback-only static server
+
+## Features
+
+- Tasks with subtasks, priority, status, due date/time, tags (colors), projects (nesting)
+- Smart views: Inbox, Today, Upcoming, Overdue, Completed, Important, Trash (restore)
+- List, **Kanban board** and **month calendar** view modes (lazy-loaded)
+- **Markdown notes** per task with `[[wiki links]]` and a backlinks panel
+- **Natural-language quick-add** (`Submit report !high #work tomorrow 5pm`)
+- **Recurring tasks** (completing one reschedules the next occurrence)
+- **Desktop notifications** for tasks as they come due
+- **Undo / redo** (`Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl/Cmd+Y`) and **rolling local backups**
+- **Lightweight charts** on a global `/stats` page (completions trend, status/priority breakdown, tasks per project)
+- Instant local search, filters, sort and group-by
+- Command palette (`Ctrl/Cmd+K`) and keyboard shortcuts (`Ctrl/Cmd+F` search, `Ctrl/Cmd+N` quick-add)
+- Dark / light / system theme
+- Export / import all data as a JSON backup
+- Virtualized lists and board columns for large datasets
+
+See `PLAN.md` for phase status (Phases 0–3 done; Phase 4 Groups 1–6 done).
+
+## Requirements
+
+- Node.js 20+
+- Windows (NSIS) or Linux (AppImage) for packaging
+
+On Windows PowerShell, the execution policy may block `npm.ps1` — invoke
+`npm.cmd` / `npx.cmd` instead.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # web dev server with HMR at http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Test & lint
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run test       # Vitest (fake-indexeddb for the DB layer)
+npm run lint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Build (web static export)
 
-## Learn More
+```bash
+npm run build      # emits ./out
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Desktop (Electron)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run electron:compile   # type-check/compile the Electron shell only
+npm run electron:dev       # next build -> tsc -> electron . (production-like)
+npm run electron:build     # next build -> tsc -> electron-builder --win
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`electron:dev` uses a full static build, so renderer changes require re-running
+it; use `npm run dev` for fast web iteration. In production the renderer is
+served from `http://127.0.0.1:41739` (a fixed loopback origin) so IndexedDB
+persistence survives restarts.
