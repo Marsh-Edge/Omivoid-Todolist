@@ -29,8 +29,12 @@ export function useTasksForView(): Task[] | undefined {
       });
       const dir = sortDir === "desc" ? -1 : 1;
       const sorted = [...tasks].sort((a, b) => {
-        if (sortBy === "order") return dir * (a.order - b.order);
-        return dir * (a[sortBy] - b[sortBy]);
+        const primary = sortBy === "order" ? a.order - b.order : a[sortBy] - b[sortBy];
+        if (primary !== 0) return dir * primary;
+        // Deterministic tiebreaker: equal sort keys keep a stable order across
+        // views and re-queries instead of inheriting whatever the index returned.
+        if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
       // Top-level tasks only in the flat list; subtasks render when expanded.
       return sorted.filter((t) => t.parentId === "");

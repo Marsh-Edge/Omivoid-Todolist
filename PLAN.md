@@ -25,6 +25,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 5** — Tier 3 + polish, animations, performance audit, tests, README — **DONE** (Markdown export done; graph view / Pomodoro / timeline-lite out of scope)
 - [x] **Phase 6** — Deferred limitations (recurrence intervals, @project NL, reminders, backlinks, stats clock) — **DONE**
 - [x] **Phase 7** — Review fixes: bugs, type safety, cleanup, persisted view prefs — **DONE**
+- [x] **Phase 8** — Performance round 2 (memoized rows/cards) + `noUncheckedIndexedAccess` — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -634,8 +635,9 @@ changes (persist view prefs, nested project indent). One commit per step.
   compile errors), and dynamic `MessageKey` values stay loose.
   (`addSubtask` at TaskRow was passing a `{title}` it never declared — caught
   by this and given its own `addSubtaskAria` key in Step 1.)
-- tsconfig: `allowJs` dropped; `noUnusedLocals`, `noUnusedParameters`,
-  `noImplicitReturns` enabled. No `any` anywhere in `src/`.
+- tsconfig: `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns` enabled
+  (`allowJs` was dropped here too, but Next.js re-adds it whenever it manages
+  tsconfig — not durable, left as-is from Phase 8 on). No `any` anywhere in `src/`.
 
 ### Step 3 — dependency and dead-file cleanup (commit on master)
 - `shadcn` + `vite` moved to devDependencies (tooling only); unused
@@ -671,5 +673,53 @@ changes (persist view prefs, nested project indent). One commit per step.
 - npm run electron:compile — clean — DONE
 - Known deviation: `allowScripts` retained (see Step 3); `queryActiveTaskTitles`
   named instead of the planned `queryTaskTitleIds` (returns id + title pairs).
+
+## Phase 8 — Performance round 2 + indexed-access safety — Steps 1–3 complete
+
+A research pass (render paths, query/sort design, selector discipline) decided
+the scope. Verified non-problems, deliberately untouched: Zustand selector
+usage (all call sites already use field selectors), virtualization (list and
+board columns were already virtualized), stats aggregation (route-lazy; five
+linear passes are fine), the index-backed query layer (JS sort runs on
+already-narrowed candidate sets — correct trade-off, documented in
+`taskQueries.ts`).
+
+### Step 1 — memoized rows/cards, hoisted handlers (commit `2366301`)
+- `TaskRow`, `BoardColumn`, `BoardCard` are `React.memo`'d; every action prop
+  is now an id/task-keyed callback created once in the parent (`useCallback`)
+  instead of a fresh closure per row per render (list passed 10 inline lambdas
+  + a fresh `dragHandleProps` object per row; the board passed 7 + 4).
+- Row tag dots are built inside the memoized rows pass (`FlatRow` carries
+  `tags`), killing the per-render `tagById` Map and per-row arrays; cards read
+  a memoized `tagById` themselves.
+- Drag highlight (`dragOverId`/`dragOverStatus` state) now re-renders only the
+  rows/columns whose `isDragOver` actually flipped, not the whole list/board.
+- Side effect: React Compiler skips memoized components, so the old
+  `react-hooks/purity` disable in `TaskRow` became unused (removed) and
+  `BoardColumn`'s `useVirtualizer` warning disappeared — lint is down from 2
+  known warnings to 1 (the TaskList one).
+
+### Step 2 — `noUncheckedIndexedAccess` (commit `14cd7a0`)
+- Flag on in tsconfig. Eight real break sites fixed with optional chaining /
+  guards (history labels, test `[0]` reads); the 9 `tokens[i] as string`
+  silencing casts in `naturalLanguage.ts` and the `group[i] as Task` cast in
+  `taskRepository.ts` were replaced with real guards/`entries()`, so the flag
+  actually protects the parser instead of being cast-shadowed.
+- Correction to Phase 7: dropping `allowJs` was not durable — Next.js re-adds
+  it whenever it manages tsconfig. Left as-is from here on.
+
+### Step 3 — deterministic sort tiebreaker (this commit)
+- `useTasksForView` sorts fall back to `createdAt` then `id` when the chosen
+  sort keys tie, so equal-key tasks keep one stable order across views and
+  re-queries instead of inheriting whatever index order Dexie returned.
+
+### Verification for Phase 8
+- npm run lint — 0 errors, 1 warning only (useVirtualizer, TaskList) — DONE
+- npm test — 214/214 passing (28 files) — DONE
+- npx tsc --noEmit — clean under `noUncheckedIndexedAccess` — DONE
+- npm run build — static export succeeds; bundle: ~1,260 KB JS / 60 KB CSS
+  (unchanged — memo/hoisting add negligible code) — DONE
+- npm run electron:compile — clean — DONE
+
 
 
