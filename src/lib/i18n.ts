@@ -280,10 +280,31 @@ const en = {
 
 export type MessageKey = keyof typeof en;
 
-export function t(
-  key: MessageKey,
-  params?: Record<string, string | number>,
-): string {
+/** Extracts `{name}` placeholder names from a message template. */
+type Placeholders<S extends string> =
+  S extends `${string}{${infer Param}}${infer Rest}`
+    ? Param | Placeholders<Rest>
+    : never;
+
+/** The params object a template demands: every placeholder, nothing extra. */
+type ParamsFor<S extends string> = Record<Placeholders<S>, string | number>;
+
+/**
+ * `t()` arguments for a key:
+ * - literal key with no placeholders → no params at all (extras are errors),
+ * - literal key with placeholders → params are required and complete,
+ * - dynamic `MessageKey` (variable/union) → loose optional params, since the
+ *   template isn't known statically.
+ */
+type TKeyArgs<K extends MessageKey> =
+  MessageKey extends K
+    ? [params?: Record<string, string | number>]
+    : Placeholders<(typeof en)[K]> extends never
+      ? []
+      : [params: ParamsFor<(typeof en)[K]>];
+
+export function t<K extends MessageKey>(key: K, ...args: TKeyArgs<K>): string;
+export function t(key: MessageKey, params?: Record<string, string | number>): string {
   let value: string = en[key];
   if (params) {
     for (const [name, replacement] of Object.entries(params)) {
