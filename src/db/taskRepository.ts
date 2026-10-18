@@ -92,12 +92,6 @@ export async function listActiveTasks(): Promise<Task[]> {
     .toArray();
 }
 
-export async function countActiveTasks(): Promise<number> {
-  return getDb()
-    .tasks.where("[deletedAt+order]")
-    .between([NONE, Dexie.minKey], [NONE, Dexie.maxKey])
-    .count();
-}
 
 export async function updateTask(
   id: string,
@@ -326,24 +320,4 @@ async function collectDescendantIds(rootId: string, activeOnly = false): Promise
     out.push(...frontier);
   }
   return out;
-}
-
-/** Persists a manual reorder (drag & drop) in one transaction. */
-export async function reorderTasks(
-  updates: ReadonlyArray<{ id: string; order: number }>,
-): Promise<void> {
-  if (updates.length === 0) return;
-  const db = getDb();
-  await db.transaction("rw", db.tasks, async () => {
-    const changes: RowChange[] = [];
-    const ts = now();
-    for (const { id, order } of updates) {
-      const existing = await db.tasks.get(id);
-      if (!existing) continue;
-      const updated = taskSchema.parse({ ...existing, order, updatedAt: ts } satisfies Task);
-      await db.tasks.put(updated);
-      changes.push(taskRow(existing, updated));
-    }
-    recordRows("undoMoveTask", changes);
-  });
 }

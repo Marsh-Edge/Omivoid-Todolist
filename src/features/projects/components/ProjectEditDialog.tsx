@@ -35,12 +35,13 @@ export function ProjectEditDialog({
 
   useEffect(() => {
     if (!open || !project) return;
-    setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setName(project.name);
       setIcon(project.icon);
       setColor(project.color);
       setError(null);
     }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, project]);
 
   async function handleSubmit(event: FormEvent) {
@@ -48,7 +49,7 @@ export function ProjectEditDialog({
     if (!project) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      setError(t("titleRequired"));
+      setError(t("nameRequired"));
       return;
     }
     setSaving(true);

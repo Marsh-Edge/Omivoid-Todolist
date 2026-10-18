@@ -184,28 +184,73 @@ export function recordHistory(entry: HistoryEntry): void {
   refresh();
 }
 
+/**
+ * Serializes undo/redo so concurrent calls (e.g. two fast Ctrl+Z presses)
+ * never read the same stack, and so the awaited DB write can't be clobbered.
+ */
+let operationQueue: Promise<void> = Promise.resolve();
+
+async function runOperation<T>(fn: () => Promise<T>): Promise<T> {
+  const result = operationQueue.then(() => fn());
+  operationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+/**
+ * Bumped by `clearHistory` so an in-flight undo/redo that raced a full-data
+ * replace (import/restore) notices it and leaves the fresh stack alone.
+ */
+let generation = 0;
+
 /** Undoes the most recent action. Returns false when there is nothing to undo. */
 export async function undo(): Promise<boolean> {
-  const step = popUndo(stack);
-  if (!step) return false;
-  await revertChanges(step.entry.changes);
-  stack = step.stack;
-  refresh();
-  return true;
+  return runOperation(async () => {
+    const before = stack;
+    const gen = generation;
+    const step = popUndo(before);
+    if (!step) return false;
+    await revertChanges(step.entry.changes);
+    if (generation === gen) {
+      // A recordHistory landing during the await kept `entry` in `past` (and
+      // cleared the redo branch); rebase instead of discarding it.
+      stack =
+        stack === before
+          ? step.stack
+          : { past: stack.past.filter((e) => e !== step.entry), future: [] };
+      refresh();
+    }
+    return true;
+  });
 }
 
 /** Redoes the most recently undone action. Returns false when unavailable. */
 export async function redo(): Promise<boolean> {
-  const step = popRedo(stack);
-  if (!step) return false;
-  await reapplyChanges(step.entry.changes);
-  stack = step.stack;
-  refresh();
-  return true;
+  return runOperation(async () => {
+    const before = stack;
+    const gen = generation;
+    const step = popRedo(before);
+    if (!step) return false;
+    await reapplyChanges(step.entry.changes);
+    if (generation === gen) {
+      // If a recordHistory landed during the await it cleared the redo branch,
+      // dropping `entry`; re-insert it (the write already happened) so the
+      // redone action stays undoable.
+      stack =
+        stack === before
+          ? step.stack
+          : { past: [...stack.past, step.entry], future: [] };
+      refresh();
+    }
+    return true;
+  });
 }
 
 /** Drops all history (used after a full-data replace/restore). */
 export function clearHistory(): void {
+  generation += 1;
   stack = emptyStack<HistoryEntry>();
   refresh();
 }

@@ -92,7 +92,7 @@ export function TaskEditDialog({
 
   useEffect(() => {
     if (!open) return;
-    setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (target?.task) {
         setTitle(target.task.title);
         setPriority(target.task.priority);
@@ -116,6 +116,7 @@ export function TaskEditDialog({
         setError(null);
       }
     }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, target]);
 
   async function handleSubmit(event: FormEvent) {

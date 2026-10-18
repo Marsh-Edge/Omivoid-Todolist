@@ -7,10 +7,9 @@ import {
   nativeImage,
   nativeTheme,
 } from "electron";
-import { createReadStream, statSync } from "node:fs";
-import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { loadWindowState, trackWindowState } from "./windowState";
+import { startStaticServer, type StaticServer } from "./staticServer";
 
 /**
  * Omivoid desktop shell.
@@ -36,117 +35,16 @@ const DEV_URL = process.env.OMIVOID_DEV_URL;
  * normally handed out to other applications.
  */
 const RENDERER_PORT = 41739;
-const RENDERER_ORIGIN = `http://127.0.0.1:${RENDERER_PORT}`;
 
-/** Renderer channel used by the global quick-add shortcut (see `preload.ts`). */
+/**
+ * Renderer channel used by the global quick-add shortcut. Duplicated in
+ * `preload.ts` (which only carries a "must match" comment): sandboxed
+ * preloads cannot require local modules, so the constant can't be shared.
+ */
 const QUICK_ADD_CHANNEL = "omivoid:quick-add";
 
 /** Global accelerator that reveals the window and focuses the quick-add box. */
 const QUICK_ADD_ACCELERATOR = "CommandOrControl+Alt+N";
-
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".map": "application/json; charset=utf-8",
-};
-
-function mimeFor(filePath: string): string {
-  return MIME_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
-}
-
-/** Resolves a request path to a file inside `rootDir`, or `null`. */
-function resolveStaticFile(rootDir: string, requestPath: string): string | null {
-  const candidates = [
-    requestPath,
-    requestPath.endsWith("/") ? `${requestPath}index.html` : `${requestPath}.html`,
-    `${requestPath.replace(/\/$/, "")}/index.html`,
-  ];
-
-  for (const candidate of candidates) {
-    const filePath = path.normalize(path.join(rootDir, candidate));
-    const insideRoot = filePath === rootDir || filePath.startsWith(rootDir + path.sep);
-    if (!insideRoot) continue;
-    try {
-      if (statSync(filePath).isFile()) return filePath;
-    } catch {
-      // try the next candidate
-    }
-  }
-  return null;
-}
-
-interface StaticServer {
-  origin: string;
-  close: () => Promise<void>;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Loopback-only static file server with SPA fallback. */
-async function startStaticServer(rootDir: string): Promise<StaticServer> {
-  const server: Server = createServer((request, response) => {
-    const requestPath = decodeURIComponent(
-      new URL(request.url ?? "/", RENDERER_ORIGIN).pathname,
-    );
-
-    const filePath = resolveStaticFile(rootDir, requestPath) ?? path.join(rootDir, "index.html");
-    const isHashedAsset = requestPath.startsWith("/_next/static/");
-
-    response.writeHead(200, {
-      "Content-Type": mimeFor(filePath),
-      "Cache-Control": isHashedAsset ? "public, max-age=31536000, immutable" : "no-store",
-    });
-
-    createReadStream(filePath)
-      .on("error", (error) => {
-        console.error("[omivoid] static file error", error);
-        response.destroy();
-      })
-      .pipe(response);
-  });
-
-  // Retry briefly: a previous instance may still be releasing the port.
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const onError = (error: Error) => reject(error);
-        server.once("error", onError);
-        server.listen(RENDERER_PORT, "127.0.0.1", () => {
-          server.off("error", onError);
-          resolve();
-        });
-      });
-      break;
-    } catch (error) {
-      if (attempt >= 10) throw error;
-      await delay(300);
-    }
-  }
-
-  return {
-    origin: RENDERER_ORIGIN,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      }),
-  };
-}
 
 let staticServer: StaticServer | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -189,14 +87,23 @@ async function createWindow(): Promise<BrowserWindow> {
 
   let rendererOrigin = DEV_URL;
   if (!rendererOrigin) {
-    staticServer ??= await startStaticServer(path.join(app.getAppPath(), "out"));
+    staticServer ??= await startStaticServer(path.join(app.getAppPath(), "out"), RENDERER_PORT);
     rendererOrigin = staticServer.origin;
   }
+  const rendererBaseOrigin = new URL(rendererOrigin).origin;
 
   // The renderer must never navigate away from its own local origin.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, navigationUrl) => {
-    if (!navigationUrl.startsWith(rendererOrigin)) {
+    let allowed = false;
+    try {
+      // Origin equality (not a prefix check): `http://127.0.0.1:41739.evil`
+      // would pass a `startsWith` test on the origin string.
+      allowed = new URL(navigationUrl).origin === rendererBaseOrigin;
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) {
       event.preventDefault();
       console.error("[omivoid] blocked navigation", navigationUrl);
     }

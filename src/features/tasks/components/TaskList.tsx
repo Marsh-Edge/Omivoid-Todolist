@@ -17,7 +17,7 @@ import {
 } from "@/db/taskRepository";
 import { queryParentIdsWithChildren, querySubtasksByParent } from "@/db/taskQueries";
 import useAppStore from "@/store/appStore";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { t } from "@/lib/i18n";
 import {
   groupTasks,
@@ -165,7 +165,7 @@ export function TaskList() {
     try {
       await moveTask(draggedId, { afterId: targetId });
     } catch (caught) {
-      toUserMessage(caught);
+      notifyError(caught);
     }
   }
 
@@ -256,14 +256,14 @@ export function TaskList() {
                   }
                   onToggleExpand={() => toggleTaskExpanded(row.task.id)}
                   onToggleComplete={() =>
-                    void setTaskCompleted(row.task.id, row.task.status !== "done").catch(toUserMessage)
+                    void setTaskCompleted(row.task.id, row.task.status !== "done").catch(notifyError)
                   }
                   onOpenDetail={() => setDetailTaskId(row.task.id)}
                   onEdit={() => openEdit(row.task)}
                   onAddSubtask={() => openAddSubtask(row.task)}
-                  onTrash={() => void trashTask(row.task.id).catch(toUserMessage)}
-                  onRestore={() => void restoreTask(row.task.id).catch(toUserMessage)}
-                  onDeleteForever={() => void deleteTaskPermanently(row.task.id).catch(toUserMessage)}
+                  onTrash={() => void trashTask(row.task.id).catch(notifyError)}
+                  onRestore={() => void restoreTask(row.task.id).catch(notifyError)}
+                  onDeleteForever={() => void deleteTaskPermanently(row.task.id).catch(notifyError)}
                 />
               </div>
             );

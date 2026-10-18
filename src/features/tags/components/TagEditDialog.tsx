@@ -33,11 +33,12 @@ export function TagEditDialog({
 
   useEffect(() => {
     if (!open || !tag) return;
-    setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setName(tag.name);
       setColor(tag.color);
       setError(null);
     }, 0);
+    return () => window.clearTimeout(timer);
   }, [open, tag]);
 
   async function handleSubmit(event: FormEvent) {
@@ -45,7 +46,7 @@ export function TagEditDialog({
     if (!tag) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      setError(t("titleRequired"));
+      setError(t("nameRequired"));
       return;
     }
     setSaving(true);

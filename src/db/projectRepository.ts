@@ -36,10 +36,6 @@ export async function listProjects(): Promise<Project[]> {
   return getDb().projects.orderBy("order").toArray();
 }
 
-export async function listRootProjects(): Promise<Project[]> {
-  return getDb().projects.where("parentId").equals("").sortBy("order");
-}
-
 export async function getProject(id: string): Promise<Project | undefined> {
   return getDb().projects.get(id);
 }

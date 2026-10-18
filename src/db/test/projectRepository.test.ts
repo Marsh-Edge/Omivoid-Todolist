@@ -5,7 +5,6 @@ import {
   deleteProject,
   getProject,
   listProjects,
-  listRootProjects,
   updateProject,
 } from "../projectRepository";
 
@@ -41,13 +40,6 @@ describe("projectRepository", () => {
     await updateProject(b.id, { order: a.order - 1 });
     const list = await listProjects();
     expect(list.map((p) => p.name)).toEqual(["B", "A"]);
-  });
-
-  it("lists only root projects", async () => {
-    const root = await createProject({ name: "Root" });
-    await createProject({ name: "Child", parentId: root.id });
-    const roots = await listRootProjects();
-    expect(roots.map((p) => p.name)).toEqual(["Root"]);
   });
 
   it("updates name/icon/color and preserves createdAt", async () => {

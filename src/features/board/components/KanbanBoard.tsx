@@ -5,7 +5,7 @@ import { useTasksForView } from "@/features/views/useTasksForView";
 import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
 import { setTaskStatus } from "@/db/taskRepository";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { groupTasksByStatus } from "@/lib/board";
 import useAppStore from "@/store/appStore";
 import { BoardColumn } from "./BoardColumn";
@@ -23,7 +23,7 @@ async function moveTaskToStatus(id: string, status: TaskStatus): Promise<void> {
   try {
     await setTaskStatus(id, status);
   } catch (caught) {
-    toUserMessage(caught);
+    notifyError(caught);
   }
 }
 

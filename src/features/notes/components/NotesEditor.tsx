@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { updateTask } from "@/db/taskRepository";
-import { toast } from "@/store/toastStore";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { replaceWikiLinks } from "@/lib/wikiLinks";
 import { t } from "@/lib/i18n";
 import type { Task } from "@/types";
@@ -66,8 +65,7 @@ export function NotesEditor({
       lastSavedRef.current = next;
       setStatus("saved");
     } catch (error) {
-      toUserMessage(error);
-      toast.error(t("noteSaveFailed"));
+      notifyError(error, t("noteSaveFailed"));
       setStatus("idle");
       return;
     }

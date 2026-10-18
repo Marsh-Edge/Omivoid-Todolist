@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Command, Monitor, Moon, Redo2, Search, Sun, Undo2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import useThemeStore from "@/store/themeStore";
 import { useHistory } from "@/features/history/useHistory";
 import { FilterMenu } from "@/features/filters/components/FilterMenu";
 import { SavedFilterMenu } from "@/features/filters/components/SavedFilterMenu";
+import { useDismissable } from "@/hooks/useDismissable";
 import { t, type MessageKey } from "@/lib/i18n";
 import type { ThemeMode } from "@/lib/theme";
 import { cn } from "cn";
@@ -49,6 +50,8 @@ export function AppHeader() {
   const hydrateTheme = useThemeStore((s) => s.hydrate);
   const { canUndo, canRedo, undoLabel, redoLabel, undo, redo } = useHistory();
   const [showMenu, setShowMenu] = useState(false);
+  const closeMenu = useCallback(() => setShowMenu(false), []);
+  const menuRef = useDismissable<HTMLDivElement>(showMenu, closeMenu);
 
   useEffect(() => {
     hydrateTheme();
@@ -142,7 +145,7 @@ export function AppHeader() {
       <FilterMenu />
       <SavedFilterMenu />
 
-      <div className="relative">
+      <div className="relative" ref={menuRef}>
         <Button
           type="button"
           variant="outline"

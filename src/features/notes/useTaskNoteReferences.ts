@@ -2,8 +2,8 @@
 
 import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { getDb } from "@/db/index";
 import { listNoteLinksTo } from "@/db/noteLinkRepository";
+import { queryActiveTaskTitles } from "@/db/taskQueries";
 import { normalizeTitle } from "@/lib/wikiLinks";
 import type { Task } from "@/types";
 
@@ -19,8 +19,6 @@ export interface TaskNoteReferences {
   backlinks: TaskSuggestion[];
   /** Title suggestions for the link picker, excluding the current task. */
   suggestTitles: (query: string, excludeId: string) => TaskSuggestion[];
-  /** True once the active-task set has loaded. */
-  ready: boolean;
 }
 
 const MAX_SUGGESTIONS = 20;
@@ -31,7 +29,7 @@ const MAX_SUGGESTIONS = 20;
  * (see PLAN.md for the indexed-table follow-up).
  */
 export function useTaskNoteReferences(task: Task | undefined): TaskNoteReferences {
-  const tasks = useLiveQuery(() => getDb().tasks.toArray(), []);
+  const tasks = useLiveQuery(() => queryActiveTaskTitles(), []);
   const backlinks = useLiveQuery(
     () => (task ? listNoteLinksTo(task.id) : Promise.resolve([])),
     [task?.id],
@@ -74,6 +72,5 @@ export function useTaskNoteReferences(task: Task | undefined): TaskNoteReference
     resolveTitle,
     backlinks: backlinksSuggestions,
     suggestTitles,
-    ready: tasks !== undefined && backlinks !== undefined,
   };
 }

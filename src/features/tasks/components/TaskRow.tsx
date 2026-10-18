@@ -245,7 +245,7 @@ export function TaskRow({
               variant="ghost"
               size="icon-sm"
               onClick={onAddSubtask}
-              aria-label={t("addSubtask", { title: task.title })}
+              aria-label={t("addSubtaskAria", { title: task.title })}
             >
               <Plus aria-hidden="true" />
             </Button>

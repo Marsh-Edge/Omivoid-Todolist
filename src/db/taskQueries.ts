@@ -99,15 +99,6 @@ export async function queryTasksForView(
   return applyTaskSearchAndFilters(inView, opts.search ?? "", opts.filters ?? {});
 }
 
-/** Direct active subtasks of `parentId`, index-ordered (`[parentId+order]`). */
-export async function querySubtasks(parentId: string): Promise<Task[]> {
-  return getDb()
-    .tasks.where("[parentId+order]")
-    .between([parentId, Dexie.minKey], [parentId, Dexie.maxKey])
-    .filter((t) => t.deletedAt === NONE)
-    .toArray();
-}
-
 /** Active subtasks of many parents at once, grouped by parentId. */
 export async function querySubtasksByParent(
   parentIds: readonly string[],
@@ -143,4 +134,14 @@ export async function queryParentIdsWithChildren(): Promise<ReadonlySet<string>>
     if (row.deletedAt === NONE) parents.add(row.parentId);
   }
   return parents;
+}
+
+/**
+ * `id` + `title` of every active (non-trashed) task — the wiki-link
+ * resolution / backlink / suggestion source for the task detail panel.
+ * Index-backed on `deletedAt`; the projection avoids holding whole rows.
+ */
+export async function queryActiveTaskTitles(): Promise<Array<{ id: string; title: string }>> {
+  const rows = await getDb().tasks.where("deletedAt").equals(NONE).toArray();
+  return rows.map((row) => ({ id: row.id, title: row.title }));
 }

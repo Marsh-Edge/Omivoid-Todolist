@@ -21,7 +21,7 @@ import {
   listSnapshots,
   restoreSnapshot,
 } from "@/db/snapshotRepository";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { t } from "@/lib/i18n";
 import type { SnapshotMeta } from "@/types";
 
@@ -45,8 +45,7 @@ export function SnapshotDialog() {
     try {
       await action();
     } catch (error) {
-      toUserMessage(error);
-      toast.error(t("errorGeneric"));
+      notifyError(error);
     } finally {
       setBusy(false);
     }

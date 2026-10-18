@@ -140,4 +140,70 @@ describe("history", () => {
     await createTask({ title: "B" });
     expect(getHistorySnapshot().canRedo).toBe(false);
   });
+
+  it("serializes concurrent undos so each pops a distinct entry", async () => {
+    const a = await createTask({ title: "A" });
+    const b = await createTask({ title: "B" });
+    expect(getHistorySnapshot().canUndo).toBe(true);
+
+    const [first, second] = await Promise.all([undo(), undo()]);
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(await getTask(a.id)).toBeUndefined();
+    expect(await getTask(b.id)).toBeUndefined();
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: false, canRedo: true });
+
+    await redo();
+    await redo();
+    expect(await getTask(a.id)).toBeDefined();
+    expect(await getTask(b.id)).toBeDefined();
+  });
+
+  it("keeps a record that lands while an undo is in flight", async () => {
+    const a = await createTask({ title: "A" });
+    const inFlight = undo();
+    // Starts while revertChanges' await is pending: must not be discarded when
+    // the undo assigns its pre-computed stack.
+    const b = await createTask({ title: "B" });
+    expect(await inFlight).toBe(true);
+
+    expect(await getTask(a.id)).toBeUndefined();
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: true, canRedo: false });
+    expect(getHistorySnapshot().undoLabel).toBe("undoCreateTask");
+
+    await undo();
+    expect(await getTask(b.id)).toBeUndefined();
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: false, canRedo: true });
+  });
+
+  it("keeps a record that lands while a redo is in flight", async () => {
+    const a = await createTask({ title: "A" });
+    await undo();
+    expect(getHistorySnapshot().canRedo).toBe(true);
+
+    const inFlight = redo();
+    const b = await createTask({ title: "B" });
+    expect(await inFlight).toBe(true);
+    expect((await getTask(a.id))?.title).toBe("A");
+    expect((await getTask(b.id))?.title).toBe("B");
+    // The interleaved record is not discarded: both entries remain undoable.
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: true, canRedo: false });
+
+    await undo();
+    await undo();
+    expect(await getTask(a.id)).toBeUndefined();
+    expect(await getTask(b.id)).toBeUndefined();
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: false, canRedo: true });
+  });
+
+  it("leaves a cleared stack alone when clearHistory races an undo", async () => {
+    await createTask({ title: "A" });
+    const inFlight = undo();
+    // Let the queued operation start (popUndo runs, revertChanges is awaiting),
+    // then clear history mid-flight as an import/restore would.
+    await Promise.resolve();
+    clearHistory();
+    expect(await inFlight).toBe(true);
+    expect(getHistorySnapshot()).toMatchObject({ canUndo: false, canRedo: false });
+  });
 });

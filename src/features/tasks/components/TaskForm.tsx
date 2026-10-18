@@ -9,7 +9,7 @@ import { createTask } from "@/db/taskRepository";
 import { createTag } from "@/db/tagRepository";
 import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError, toUserMessage } from "@/lib/errors";
 import { parseQuickAdd, type ParsedTask } from "@/lib/naturalLanguage";
 import { recurrenceLabel, t, type MessageKey } from "@/lib/i18n";
 import useAppStore from "@/store/appStore";
@@ -53,8 +53,9 @@ export function TaskForm() {
       try {
         const created = await createTag({ name });
         ids.push(created.id);
-      } catch {
+      } catch (caught) {
         // A single bad tag shouldn't block the task from being created.
+        toUserMessage(caught);
       }
     }
     return ids;
@@ -86,7 +87,7 @@ export function TaskForm() {
       setValue("");
       setParsed(null);
     } catch (err) {
-      toUserMessage(err);
+      notifyError(err);
     } finally {
       setIsAdding(false);
     }

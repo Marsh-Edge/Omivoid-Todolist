@@ -24,7 +24,7 @@ import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
 import { createProject } from "@/db/projectRepository";
 import { createTag, deleteTag } from "@/db/tagRepository";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError, toUserMessage } from "@/lib/errors";
 import { PROJECT_ICON_MAP } from "@/lib/projectIcons";
 import { t } from "@/lib/i18n";
 import { ProjectEditDialog } from "@/features/projects/components/ProjectEditDialog";
@@ -143,7 +143,7 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-full w-64 flex-col gap-1 overflow-y-auto border-r bg-muted/30 p-4">
-      <nav aria-label={t("viewInbox")} className="flex flex-col gap-1">
+      <nav aria-label={t("navViews")} className="flex flex-col gap-1">
         {views.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
@@ -152,7 +152,6 @@ export function Sidebar() {
               goHome();
               setActiveView(id);
               setSelectedProjectId(null);
-              // Clear search when switching views (explicit behavior: filters persist unless cleared).
             }}
             className={cn(
               "hover:bg-accent focus-visible:bg-accent flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none",
@@ -321,7 +320,7 @@ export function Sidebar() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void deleteTag(tag.id).catch(toUserMessage)}
+                  onClick={() => void deleteTag(tag.id).catch(notifyError)}
                   aria-label={t("deleteTagAria", { name: tag.name })}
                   className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                 >

@@ -44,7 +44,7 @@ import {
   isDueNotificationsEnabled,
   setDueNotificationsEnabled,
 } from "@/lib/notificationPrefs";
-import { toUserMessage } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { t, type MessageKey } from "@/lib/i18n";
 
 const views: ReadonlyArray<{ id: View; labelKey: MessageKey; icon: LucideIcon }> = [
@@ -145,8 +145,7 @@ export function CommandPalette() {
         await createSnapshot();
         toast.success(t("backupsCreatedToast"));
       } catch (error) {
-        toUserMessage(error);
-        toast.error(t("errorGeneric"));
+        notifyError(error);
       }
     });
   }
@@ -161,8 +160,7 @@ export function CommandPalette() {
         const count = await downloadBackup();
         toast.success(t("exportSuccess", { count }));
       } catch (error) {
-        toUserMessage(error);
-        toast.error(t("exportFailed"));
+        notifyError(error, t("exportFailed"));
       }
     });
   }
@@ -177,8 +175,7 @@ export function CommandPalette() {
           toast.success(t("exportMarkdownSuccess", { count }));
         }
       } catch (error) {
-        toUserMessage(error);
-        toast.error(t("exportFailed"));
+        notifyError(error, t("exportFailed"));
       }
     });
   }
@@ -193,8 +190,7 @@ export function CommandPalette() {
           toast.success(t("exportMarkdownSuccess", { count }));
         }
       } catch (error) {
-        toUserMessage(error);
-        toast.error(t("exportFailed"));
+        notifyError(error, t("exportFailed"));
       }
     });
   }
@@ -220,8 +216,7 @@ export function CommandPalette() {
         }),
       );
     } catch (error) {
-      toUserMessage(error);
-      toast.error(t("importFailed"));
+      notifyError(error, t("importFailed"));
     }
   }
 
