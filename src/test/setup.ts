@@ -9,6 +9,34 @@ class ResizeObserverStub {
   disconnect(): void {}
 }
 
+// jsdom in this setup ships no Web Storage at all (window.localStorage is
+// undefined). Provide an in-memory Storage so persistence code is testable.
+if (typeof globalThis.localStorage === "undefined") {
+  const createStorage = (): Storage => {
+    const store = new Map<string, string>();
+    return {
+      get length() {
+        return store.size;
+      },
+      clear: () => store.clear(),
+      getItem: (key: string) => store.get(String(key)) ?? null,
+      key: (index: number) => [...store.keys()][index] ?? null,
+      removeItem: (key: string) => {
+        store.delete(String(key));
+      },
+      setItem: (key: string, value: string) => {
+        store.set(String(key), String(value));
+      },
+    };
+  };
+  const storage = createStorage();
+  Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true });
+  if (typeof window !== "undefined") {
+    Object.defineProperty(window, "localStorage", { value: storage, configurable: true });
+    Object.defineProperty(window, "sessionStorage", { value: createStorage(), configurable: true });
+  }
+}
+
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }

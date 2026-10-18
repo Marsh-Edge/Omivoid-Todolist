@@ -48,6 +48,7 @@ export function AppHeader() {
   const themeMode = useThemeStore((s) => s.mode);
   const cycleTheme = useThemeStore((s) => s.cycle);
   const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const hydrateViewPrefs = useAppStore((s) => s.hydrateViewPrefs);
   const { canUndo, canRedo, undoLabel, redoLabel, undo, redo } = useHistory();
   const [showMenu, setShowMenu] = useState(false);
   const closeMenu = useCallback(() => setShowMenu(false), []);
@@ -55,7 +56,8 @@ export function AppHeader() {
 
   useEffect(() => {
     hydrateTheme();
-  }, [hydrateTheme]);
+    hydrateViewPrefs();
+  }, [hydrateTheme, hydrateViewPrefs]);
 
   // Keep "system" theme in sync with OS changes while it is selected.
   useEffect(() => {

@@ -41,12 +41,17 @@ const views: ReadonlyArray<{ id: View; labelKey: Parameters<typeof t>[0]; icon: 
   { id: "trash", labelKey: "viewTrash", icon: Trash2 },
 ];
 
-function buildTree(projects: Project[]): Project[] {
-  const roots = projects.filter((p) => p.parentId === "");
-  const ordered: Project[] = [];
+/**
+ * Depth-first flatten of the project tree: roots first, each child directly
+ * after its parent so indentation reads as nesting. A project whose parent no
+ * longer exists is treated as a root (deleting a parent must not hide children).
+ */
+function buildTree(projects: Project[]): Array<{ project: Project; depth: number }> {
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const roots = projects.filter((p) => p.parentId === "" || !byId.has(p.parentId));
+  const ordered: Array<{ project: Project; depth: number }> = [];
   const visit = (parent: Project, depth: number) => {
-    ordered.push(parent);
-    void depth;
+    ordered.push({ project: parent, depth });
     for (const child of projects.filter((p) => p.parentId === parent.id)) {
       visit(child, depth + 1);
     }
@@ -214,11 +219,12 @@ export function Sidebar() {
           {orderedProjects.length === 0 ? (
             <p className="text-muted-foreground px-2 text-xs">{t("noProjects")}</p>
           ) : (
-            orderedProjects.map((p) => (
+            orderedProjects.map(({ project: p, depth }) => (
               <div
                 key={p.id}
+                style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
                 className={cn(
-                  "group hover:bg-accent flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors",
+                  "group hover:bg-accent flex items-center gap-1 rounded-md pr-2 py-1.5 text-sm transition-colors",
                   selectedProjectId === p.id && "bg-accent font-medium",
                 )}
               >

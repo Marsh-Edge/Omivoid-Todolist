@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { TaskFilterCriteria } from "@/types";
+import { pickViewPrefs, readViewPrefs, writeViewPrefs } from "@/lib/viewPrefs";
 
 export type View = "inbox" | "today" | "upcoming" | "overdue" | "completed" | "important" | "trash";
 
@@ -43,7 +44,13 @@ export interface AppState {
   setViewMode: (viewMode: ViewMode) => void;
   toggleTaskExpanded: (id: string) => void;
   collapseAllTasks: () => void;
+  /** Loads persisted view preferences on mount (see `lib/viewPrefs.ts`). */
+  hydrateViewPrefs: () => void;
 }
+
+// Set while `hydrateViewPrefs` applies stored values, so the subscription
+// below doesn't write the same blob straight back.
+let hydratingViewPrefs = false;
 
 const useAppStore = create<AppState>((set) => ({
   activeView: "inbox",
@@ -78,6 +85,28 @@ const useAppStore = create<AppState>((set) => ({
       return { expandedTaskIds: next };
     }),
   collapseAllTasks: () => set({ expandedTaskIds: new Set<string>() }),
+  hydrateViewPrefs: () => {
+    const prefs = readViewPrefs();
+    if (!prefs) return;
+    hydratingViewPrefs = true;
+    try {
+      set(prefs);
+    } finally {
+      hydratingViewPrefs = false;
+    }
+  },
 }));
+
+// Persist the view-prefs slice whenever one of its fields changes.
+if (typeof window !== "undefined") {
+  useAppStore.subscribe((state, previous) => {
+    if (hydratingViewPrefs) return;
+    const next = pickViewPrefs(state);
+    const before = pickViewPrefs(previous);
+    if (JSON.stringify(next) !== JSON.stringify(before)) {
+      writeViewPrefs(next);
+    }
+  });
+}
 
 export default useAppStore;
