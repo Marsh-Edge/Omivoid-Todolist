@@ -28,6 +28,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 8** — Performance round 2 (memoized rows/cards) + `noUncheckedIndexedAccess` — **DONE**
 - [x] **Phase 9** — i18n completion pass (shell, export document, icon labels) — **DONE**
 - [x] **Phase 10** — Completed-view visibility bugfix (calendar completion date, done subtasks) — **DONE**
+- [x] **Phase 11** — Brand visibility: "Omivoid Todolist" in header + tab title — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -813,6 +814,24 @@ the checkbox wiring) — the bug was in presentation:
 - Manual check pending in `npm run electron:dev`: complete tasks
   (undated, dated, subtask) → visible in Completed in list, board **and**
   calendar mode.
+
+## Phase 11 — Brand visibility — complete
+
+The brand appeared nowhere in the UI: `appName` existed as an i18n key but
+was never rendered, and the header started straight at the search field.
+
+- `appName` updated to "Omivoid Todolist"; `AppHeader` renders it left of
+  the search input with a `ListTodo` glyph (bundled lucide icon, verified
+  present in the installed version). The header already `flex-wrap`s, so
+  narrow windows wrap instead of crowding.
+- Tab/window title in `layout.tsx` now matches: "Omivoid Todolist"
+  (brand stays untranslated English, per the Phase 9 convention).
+
+### Verification for Phase 11
+- npm run lint — 0 errors, 1 warning only (useVirtualizer) — DONE
+- npm test — 220/220 passing (28 files) — DONE
+- npm run build — static export succeeds (TypeScript check included) — DONE
+- npm run electron:compile — clean — DONE
 
 
 

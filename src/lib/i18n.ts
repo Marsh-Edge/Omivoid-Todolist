@@ -10,7 +10,7 @@ import { parseRecurrence } from "@/lib/recurrence";
 import type { RecurrenceFreq } from "@/types";
 
 const en = {
-  appName: "Omivoid",
+  appName: "Omivoid Todolist",
   tagline: "Local-first tasks — stored only on this device.",
   addTaskPlaceholder: "What needs to be done?",
   addTaskButton: "Add",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Command, Monitor, Moon, Redo2, Search, Sun, Undo2, X } from "lucide-react";
+import { ChevronDown, Command, ListTodo, Monitor, Moon, Redo2, Search, Sun, Undo2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import useAppStore, { type AppState } from "@/store/appStore";
@@ -74,6 +74,10 @@ export function AppHeader() {
 
   return (
     <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+      <div className="flex shrink-0 items-center gap-1.5 pr-1">
+        <ListTodo className="text-primary size-4" aria-hidden="true" />
+        <span className="text-sm font-semibold tracking-tight">{t("appName")}</span>
+      </div>
       <div className="flex min-w-[240px] flex-1 items-center gap-2">
         <Search className="text-muted-foreground size-4" aria-hidden="true" />
         <Input

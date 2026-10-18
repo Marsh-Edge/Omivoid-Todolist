@@ -12,7 +12,7 @@ const spaceGrotesk = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Omivoid",
+  title: "Omivoid Todolist",
   description: t("tagline"),
 };
 
