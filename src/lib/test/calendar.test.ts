@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMonthMatrix, countWithoutDue, dayKey, groupTasksByDay } from "../calendar";
+import { byCompletedAt, buildMonthMatrix, countWithoutDate, dayKey, groupTasksByDay } from "../calendar";
 import type { Task } from "@/types";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -42,11 +42,40 @@ describe("groupTasksByDay", () => {
     expect(map.get("2026-05-03")?.map((t) => t.id)).toEqual(["a", "b"]);
     expect(map.has("1970-01-01")).toBe(false);
   });
+
+  it("groups by completion day when given the completed selector", () => {
+    const a = makeTask({
+      id: "a",
+      status: "done",
+      dueAt: new Date(2026, 4, 3).getTime(),
+      completedAt: new Date(2026, 6, 10).getTime(),
+    });
+    const b = makeTask({
+      id: "b",
+      status: "done",
+      dueAt: new Date(2026, 4, 5).getTime(),
+      completedAt: new Date(2026, 6, 10, 23).getTime(),
+    });
+    const c = makeTask({ id: "c", status: "done", dueAt: new Date(2026, 4, 3).getTime(), completedAt: 0 });
+    const map = groupTasksByDay([a, b, c], byCompletedAt);
+
+    expect(map.size).toBe(1);
+    expect(map.get("2026-07-10")?.map((t) => t.id)).toEqual(["a", "b"]);
+  });
 });
 
-describe("countWithoutDue", () => {
-  it("counts only tasks with no due date", () => {
-    expect(countWithoutDue([makeTask({ dueAt: 0 }), makeTask({ dueAt: 1 }), makeTask()])).toBe(2);
+describe("countWithoutDate", () => {
+  it("counts only tasks with no due date by default", () => {
+    expect(countWithoutDate([makeTask({ dueAt: 0 }), makeTask({ dueAt: 1 }), makeTask()])).toBe(2);
+  });
+
+  it("counts tasks without a completion date under the completed selector", () => {
+    expect(
+      countWithoutDate(
+        [makeTask({ completedAt: 0 }), makeTask({ completedAt: 1 })],
+        byCompletedAt,
+      ),
+    ).toBe(1);
   });
 });
 

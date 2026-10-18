@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { useTasksForView } from "@/features/views/useTasksForView";
-import { buildMonthMatrix, countWithoutDue, dayKey, groupTasksByDay } from "@/lib/calendar";
+import { byCompletedAt, buildMonthMatrix, countWithoutDate, dayKey, groupTasksByDay } from "@/lib/calendar";
 import useAppStore from "@/store/appStore";
 import { t } from "@/lib/i18n";
 
@@ -14,18 +14,22 @@ import { t } from "@/lib/i18n";
 const MAX_VISIBLE_PER_DAY = 3;
 
 /**
- * Month calendar of the active view's tasks that have a due date. Tasks
- * without a due date can't be placed, so they're summarized instead.
+ * Month calendar of the active view's tasks. Tasks are placed by due date —
+ * except in the Completed view, where they're placed by completion date so a
+ * finished task shows on the day it was done. Tasks whose timestamp is unset
+ * can't be placed, so they're summarized instead.
  */
 export default function CalendarView() {
   const tasks = useTasksForView();
+  const activeView = useAppStore((s) => s.activeView);
   const setDetailTaskId = useAppStore((s) => s.setDetailTaskId);
   const [monthMs, setMonthMs] = useState(() => Date.now());
 
+  const dateOf = activeView === "completed" ? byCompletedAt : undefined;
   const monthDate = useMemo(() => new Date(monthMs), [monthMs]);
   const weeks = useMemo(() => buildMonthMatrix(monthMs, 0), [monthMs]);
-  const tasksByDay = useMemo(() => groupTasksByDay(tasks ?? []), [tasks]);
-  const noDue = useMemo(() => countWithoutDue(tasks ?? []), [tasks]);
+  const tasksByDay = useMemo(() => groupTasksByDay(tasks ?? [], dateOf), [tasks, dateOf]);
+  const noDate = useMemo(() => countWithoutDate(tasks ?? [], dateOf), [tasks, dateOf]);
 
   if (!tasks) {
     return <div className="text-muted-foreground text-sm">{t("loadingTasks")}</div>;
@@ -58,9 +62,9 @@ export default function CalendarView() {
           <ChevronRight aria-hidden="true" />
         </Button>
         <h2 className="ml-1 text-sm font-semibold">{format(monthDate, "MMMM yyyy")}</h2>
-        {noDue > 0 ? (
+        {noDate > 0 ? (
           <span className="text-muted-foreground ml-auto text-xs">
-            {t("calendarNoDueNote", { count: noDue })}
+            {t("calendarNoDueNote", { count: noDate })}
           </span>
         ) : null}
       </div>

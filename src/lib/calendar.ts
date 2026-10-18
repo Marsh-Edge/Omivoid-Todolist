@@ -17,14 +17,30 @@ export function dayKey(ms: number): string {
 }
 
 /**
- * Indexes tasks by their due day. Tasks without a due date (`dueAt <= 0`) are
- * skipped — they cannot be placed on the grid.
+ * Picks the timestamp a task is placed by on the grid. Defaults to the due
+ * date; the Completed view passes the completion date instead.
  */
-export function groupTasksByDay(tasks: readonly Task[]): Map<string, Task[]> {
+export type DayKeySelector = (task: Task) => number;
+
+/** Default placement: the task's due date. */
+export const byDueAt: DayKeySelector = (task) => task.dueAt;
+
+/** Placement for the Completed view: when the task was finished. */
+export const byCompletedAt: DayKeySelector = (task) => task.completedAt;
+
+/**
+ * Indexes tasks by their selected day. Tasks whose timestamp is unset
+ * (`<= 0`) are skipped — they cannot be placed on the grid.
+ */
+export function groupTasksByDay(
+  tasks: readonly Task[],
+  dateOf: DayKeySelector = byDueAt,
+): Map<string, Task[]> {
   const byDay = new Map<string, Task[]>();
   for (const task of tasks) {
-    if (task.dueAt <= 0) continue;
-    const key = dayKey(task.dueAt);
+    const ms = dateOf(task);
+    if (ms <= 0) continue;
+    const key = dayKey(ms);
     const list = byDay.get(key);
     if (list) list.push(task);
     else byDay.set(key, [task]);
@@ -55,9 +71,12 @@ export function buildMonthMatrix(monthMs: number, weekStartsOn: WeekStartsOn = 0
   return weeks;
 }
 
-/** Count of tasks that have no due date (cannot be shown on the grid). */
-export function countWithoutDue(tasks: readonly Task[]): number {
+/** Count of tasks whose placement timestamp is unset (cannot be shown). */
+export function countWithoutDate(
+  tasks: readonly Task[],
+  dateOf: DayKeySelector = byDueAt,
+): number {
   let count = 0;
-  for (const task of tasks) if (task.dueAt <= 0) count++;
+  for (const task of tasks) if (dateOf(task) <= 0) count++;
   return count;
 }
