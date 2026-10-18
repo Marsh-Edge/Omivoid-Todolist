@@ -26,6 +26,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 6** — Deferred limitations (recurrence intervals, @project NL, reminders, backlinks, stats clock) — **DONE**
 - [x] **Phase 7** — Review fixes: bugs, type safety, cleanup, persisted view prefs — **DONE**
 - [x] **Phase 8** — Performance round 2 (memoized rows/cards) + `noUncheckedIndexedAccess` — **DONE**
+- [x] **Phase 9** — i18n completion pass (shell, export document, icon labels) — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -719,6 +720,50 @@ already-narrowed candidate sets — correct trade-off, documented in
 - npx tsc --noEmit — clean under `noUncheckedIndexedAccess` — DONE
 - npm run build — static export succeeds; bundle: ~1,260 KB JS / 60 KB CSS
   (unchanged — memo/hoisting add negligible code) — DONE
+- npm run electron:compile — clean — DONE
+
+## Phase 9 — i18n completion pass — Steps 1–3 complete
+
+Closes the last hardcoded-English gaps found by an exhaustive audit of
+`src/**` (all components, primitives, lib helpers). Console/Zod/repo errors
+stay English by design (they flow through `toUserMessage`/`notifyError`,
+which shows only translated copy). Intentionally untouched: date-fns format
+tokens (need a locale switch, not string keys), keyboard-key glyphs (⌘K, ↑↓),
+the brand in `<title>`, natural-language *input* syntax (that's parser
+grammar, not display copy), and `throw` messages in `src/db/*` (technical).
+
+### Step 1 — app shell (commit `14059f3`)
+- Error boundary: `errorBoundaryTitle`/`errorBoundaryBody` (the only fully
+  hardcoded screen left).
+- Dialog primitive: X-button `sr-only` label + `DialogFooter` close button use
+  the existing `closeDialog` key.
+- Command primitive: dead English default `title`/`description` replaced with
+  the palette keys every caller already passed.
+- Root layout metadata `description` uses `tagline` (was a divergent string).
+
+### Step 2 — markdown export document (commit `91f3a34`)
+- New keys: `exportMarkdownTitle`/`…TitleView`/`…TitleAll`,
+  `exportMarkdownExported` (`{date}`, `{count}`), `exportMarkdownDue`
+  (`{date}`), `exportMarkdownRepeats` (`{rule}`); section headers reuse
+  `viewInbox`/`groupNoProject`.
+- English values are byte-identical to the old literals — exported files do
+  not change. Filename templates (`omivoid-tasks-…md`,
+  `omivoid-backup-…json`) deliberately stay stable technical artifacts so
+  downloads sort consistently regardless of locale.
+- `markdownExport.test.ts` mock gained the new keys + real `t()` placeholder
+  substitution (it previously only mapped the three priority words).
+
+### Step 3 — icon picker labels (this commit)
+- New `icon*` keys (12) + `PROJECT_ICON_LABEL_KEYS` map in `projectIcons.ts`
+  (follows the `Record<…, MessageKey>` convention); `IconPicker` tooltips and
+  `aria-labels` were the raw lucide component names ("BookOpen",
+  "GraduationCap") and are now translated ("Book", "Graduation cap").
+
+### Verification for Phase 9
+- npm run lint — 0 errors, 1 warning only (useVirtualizer) — DONE
+- npm test — 214/214 passing (28 files) — DONE
+- npx tsc --noEmit — clean — DONE
+- npm run build — static export succeeds — DONE
 - npm run electron:compile — clean — DONE
 
 

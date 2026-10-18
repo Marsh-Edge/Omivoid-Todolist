@@ -13,6 +13,7 @@ import {
   Star,
   type LucideIcon,
 } from "lucide-react";
+import type { MessageKey } from "@/lib/i18n";
 
 /**
  * Curated project icons. We deliberately keep this a small, explicit allowlist
@@ -39,6 +40,22 @@ export const PROJECT_ICONS: ReadonlyArray<{
 ];
 
 const byName = new Map(PROJECT_ICONS.map((entry) => [entry.name, entry.Icon]));
+
+/** Translated display names for the allowlist (aria-labels and tooltips). */
+export const PROJECT_ICON_LABEL_KEYS: Record<string, MessageKey> = {
+  Folder: "iconFolder",
+  Briefcase: "iconBriefcase",
+  Home: "iconHome",
+  Star: "iconStar",
+  Heart: "iconHeart",
+  BookOpen: "iconBookOpen",
+  Code: "iconCode",
+  GraduationCap: "iconGraduationCap",
+  ShoppingCart: "iconShoppingCart",
+  Plane: "iconPlane",
+  Dumbbell: "iconDumbbell",
+  Lightbulb: "iconLightbulb",
+};
 
 /**
  * Name → component lookup. Exposed as a plain record so callers can index it

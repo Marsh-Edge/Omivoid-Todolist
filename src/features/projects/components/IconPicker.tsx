@@ -2,7 +2,8 @@
 
 import { Ban, type LucideIcon } from "lucide-react";
 import { cn } from "cn";
-import { PROJECT_ICONS } from "@/lib/projectIcons";
+import { PROJECT_ICONS, PROJECT_ICON_LABEL_KEYS } from "@/lib/projectIcons";
+import { t } from "@/lib/i18n";
 
 const ICON_OPTIONS: ReadonlyArray<{ name: string; Icon: LucideIcon }> = [
   { name: "", Icon: Ban },
@@ -33,7 +34,7 @@ export function IconPicker({
     >
       {ICON_OPTIONS.map(({ name, Icon }) => {
         const isSelected = selected === name;
-        const label = name || noneLabel;
+        const label = name ? t(PROJECT_ICON_LABEL_KEYS[name] ?? "iconNone") : noneLabel;
         return (
           <button
             key={name || "none"}
