@@ -1,5 +1,6 @@
 import { getDb } from "./index";
 import { projectSchema, tagSchema, taskSchema } from "./schemas";
+import { reconcileNoteLinks } from "./noteLinkRepository";
 import {
   pushEntry,
   popRedo,
@@ -85,25 +86,55 @@ async function removeRow(table: HistoryTable, id: string): Promise<void> {
   }
 }
 
+/**
+ * Keeps the derived `noteLinks` table in step after task rows were written
+ * directly: rows owned by a re-created or note-edited task are rebuilt, and
+ * incoming rows are repaired or blanked as the target appears/disappears.
+ */
+async function reconcileLinksAfterReplay(
+  changes: readonly RowChange[],
+  side: "before" | "after",
+): Promise<void> {
+  const taskChanges = changes.filter((change) => change.table === "tasks");
+  if (taskChanges.length === 0) return;
+
+  const syncSourceIds: string[] = [];
+  const repairTargets: Task[] = [];
+  const clearTargetIds: string[] = [];
+  for (const change of taskChanges) {
+    const image = (side === "before" ? change.before : change.after) as Task | null;
+    const other = (side === "before" ? change.after : change.before) as Task | null;
+    if (image === null) {
+      clearTargetIds.push(change.id);
+      continue;
+    }
+    if (other === null || image.notes !== other.notes) syncSourceIds.push(image.id);
+    if (other === null || image.title !== other.title) repairTargets.push(image);
+  }
+  await reconcileNoteLinks({ syncSourceIds, repairTargets, clearTargetIds });
+}
+
 /** Applies every "before" image (removing rows that were created). */
 export async function revertChanges(changes: readonly RowChange[]): Promise<void> {
   const db = getDb();
-  await db.transaction("rw", db.tasks, db.projects, db.tags, async () => {
+  await db.transaction("rw", db.tasks, db.projects, db.tags, db.noteLinks, async () => {
     for (const change of changes) {
       if (change.before === null) await removeRow(change.table, change.id);
       else await writeRow(change.table, change.before);
     }
+    await reconcileLinksAfterReplay(changes, "before");
   });
 }
 
 /** Applies every "after" image (removing rows that were deleted). */
 export async function reapplyChanges(changes: readonly RowChange[]): Promise<void> {
   const db = getDb();
-  await db.transaction("rw", db.tasks, db.projects, db.tags, async () => {
+  await db.transaction("rw", db.tasks, db.projects, db.tags, db.noteLinks, async () => {
     for (const change of changes) {
       if (change.after === null) await removeRow(change.table, change.id);
       else await writeRow(change.table, change.after);
     }
+    await reconcileLinksAfterReplay(changes, "after");
   });
 }
 

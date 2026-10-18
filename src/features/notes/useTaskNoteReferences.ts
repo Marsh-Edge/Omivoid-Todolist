@@ -2,8 +2,9 @@
 
 import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { listActiveTasks } from "@/db/taskRepository";
-import { findBacklinks, normalizeTitle } from "@/lib/wikiLinks";
+import { getDb } from "@/db/index";
+import { listNoteLinksTo } from "@/db/noteLinkRepository";
+import { normalizeTitle } from "@/lib/wikiLinks";
 import type { Task } from "@/types";
 
 export interface TaskSuggestion {
@@ -30,7 +31,11 @@ const MAX_SUGGESTIONS = 20;
  * (see PLAN.md for the indexed-table follow-up).
  */
 export function useTaskNoteReferences(task: Task | undefined): TaskNoteReferences {
-  const tasks = useLiveQuery(() => listActiveTasks(), []);
+  const tasks = useLiveQuery(() => getDb().tasks.toArray(), []);
+  const backlinks = useLiveQuery(
+    () => (task ? listNoteLinksTo(task.id) : Promise.resolve([])),
+    [task?.id],
+  );
 
   const titleToId = useMemo(() => {
     const map = new Map<string, string>();
@@ -46,13 +51,12 @@ export function useTaskNoteReferences(task: Task | undefined): TaskNoteReference
     [titleToId],
   );
 
-  const backlinks = useMemo<TaskSuggestion[]>(() => {
-    if (!tasks || !task) return [];
-    return findBacklinks(
-      tasks.filter((item) => item.id !== task.id),
-      task.title,
-    ).map((item) => ({ id: item.id, title: item.title }));
-  }, [tasks, task]);
+  const backlinksSuggestions = useMemo<TaskSuggestion[]>(() => {
+    const ids = new Set(backlinks?.map((link) => link.sourceTaskId) ?? []);
+    return (tasks ?? [])
+      .filter((item) => item.id !== task?.id && ids.has(item.id))
+      .map((item) => ({ id: item.id, title: item.title }));
+  }, [backlinks, tasks, task?.id]);
 
   const suggestTitles = useCallback(
     (query: string, excludeId: string): TaskSuggestion[] => {
@@ -66,5 +70,10 @@ export function useTaskNoteReferences(task: Task | undefined): TaskNoteReference
     [tasks],
   );
 
-  return { resolveTitle, backlinks, suggestTitles, ready: tasks !== undefined };
+  return {
+    resolveTitle,
+    backlinks: backlinksSuggestions,
+    suggestTitles,
+    ready: tasks !== undefined && backlinks !== undefined,
+  };
 }

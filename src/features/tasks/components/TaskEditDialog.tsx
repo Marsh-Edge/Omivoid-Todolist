@@ -13,8 +13,9 @@ import { Input } from "@/components/ui/input";
 import { createTask, updateTask } from "@/db/taskRepository";
 import { useProjects } from "@/features/projects/useProjects";
 import { toUserMessage } from "@/lib/errors";
-import { recurrenceLabel, t, type MessageKey } from "@/lib/i18n";
-import type { Task, TaskPriority, TaskStatus } from "@/types";
+import { recurrenceUnit, t, type MessageKey } from "@/lib/i18n";
+import { formatRecurrence, parseRecurrence } from "@/lib/recurrence";
+import type { RecurrenceFreq, Task, TaskPriority, TaskStatus } from "@/types";
 
 export interface TaskEditTarget {
   /** undefined = create a new task */
@@ -26,16 +27,40 @@ export interface TaskEditTarget {
 const priorities: readonly TaskPriority[] = ["none", "low", "medium", "high"];
 const statuses: readonly TaskStatus[] = ["todo", "in_progress", "done"];
 
-/** Interval-1 presets only; intervals ("every 3 days") come from quick-add. */
-const recurrences = ["", "daily", "weekly", "monthly", "yearly"] as const;
+const recurrenceFreqs: readonly RecurrenceFreq[] = ["daily", "weekly", "monthly", "yearly"];
 
-const recurrenceLabelKeys: Record<(typeof recurrences)[number], MessageKey> = {
-  "": "recurrenceNone",
-  daily: "recurrenceDaily",
-  weekly: "recurrenceWeekly",
-  monthly: "recurrenceMonthly",
-  yearly: "recurrenceYearly",
+const recurrenceFreqLabelKeys: Record<RecurrenceFreq, MessageKey> = {
+  daily: "recurrenceFreqDaily",
+  weekly: "recurrenceFreqWeekly",
+  monthly: "recurrenceFreqMonthly",
+  yearly: "recurrenceFreqYearly",
 };
+
+const MAX_RECURRENCE_INTERVAL = 9999;
+
+function clampInterval(value: number): number {
+  return Math.min(Math.max(value, 1), MAX_RECURRENCE_INTERVAL);
+}
+
+/** Parses the interval field; invalid or empty input falls back to 1. */
+function parseIntervalText(text: string): number {
+  const n = Number(text);
+  return Number.isInteger(n) && n >= 1 ? clampInterval(n) : 1;
+}
+
+/** Reminder lead-time presets, in minutes before the due time. */
+const remindPresets = [0, 10, 30, 60, 120, 1440] as const;
+
+function remindOptionLabel(minutes: number): string {
+  if (minutes <= 0) return t("remindAtDue");
+  if (minutes % 1440 === 0) {
+    return minutes === 1440 ? t("remindDayBefore") : t("remindDaysBefore", { count: minutes / 1440 });
+  }
+  if (minutes >= 60 && minutes % 60 === 0) {
+    return minutes === 60 ? t("remindHourBefore") : t("remindHoursBefore", { count: minutes / 60 });
+  }
+  return t("remindMinutesBefore", { count: minutes });
+}
 
 function toLocalInput(ms: number): string {
   if (ms <= 0) return "";
@@ -58,8 +83,10 @@ export function TaskEditDialog({
   const [priority, setPriority] = useState<TaskPriority>("none");
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [dueLocal, setDueLocal] = useState("");
-  const [recurrence, setRecurrence] = useState("");
+  const [freq, setFreq] = useState<RecurrenceFreq | "">("");
+  const [intervalText, setIntervalText] = useState("1");
   const [projectId, setProjectId] = useState("");
+  const [remindBeforeMin, setRemindBeforeMin] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -71,16 +98,21 @@ export function TaskEditDialog({
         setPriority(target.task.priority);
         setStatus(target.task.status);
         setDueLocal(toLocalInput(target.task.dueAt));
-        setRecurrence(target.task.recurrence);
+        const rule = parseRecurrence(target.task.recurrence);
+        setFreq(rule?.freq ?? "");
+        setIntervalText(String(rule?.interval ?? 1));
         setProjectId(target.task.projectId);
+        setRemindBeforeMin(target.task.remindBeforeMin);
         setError(null);
       } else {
         setTitle("");
         setPriority("none");
         setStatus("todo");
         setDueLocal("");
-        setRecurrence("");
+        setFreq("");
+        setIntervalText("1");
         setProjectId("");
+        setRemindBeforeMin(0);
         setError(null);
       }
     }, 0);
@@ -97,13 +129,17 @@ export function TaskEditDialog({
     setError(null);
     try {
       const dueAt = dueLocal ? new Date(dueLocal).getTime() : 0;
+      const recurrence = freq ? formatRecurrence({ freq, interval: parseIntervalText(intervalText) }) : "";
+      const dueValue = Number.isFinite(dueAt) ? dueAt : 0;
+      const remind = dueValue > 0 ? remindBeforeMin : 0;
       if (target?.task) {
         await updateTask(target.task.id, {
           title: trimmed,
           priority,
           status,
-          dueAt: Number.isFinite(dueAt) ? dueAt : 0,
+          dueAt: dueValue,
           recurrence,
+          remindBeforeMin: remind,
           projectId,
         });
       } else {
@@ -111,8 +147,9 @@ export function TaskEditDialog({
           title: trimmed,
           priority,
           status,
-          dueAt: Number.isFinite(dueAt) ? dueAt : 0,
+          dueAt: dueValue,
           recurrence,
+          remindBeforeMin: remind,
           projectId,
           parentId: target?.parentId ?? "",
         });
@@ -126,16 +163,19 @@ export function TaskEditDialog({
   }
 
   const isSubtask = Boolean(target?.parentId);
+  const interval = parseIntervalText(intervalText);
 
-  // Keep a non-preset rule (e.g. "weekly:2" from quick-add) selectable.
-  const recurrenceOptions: string[] = (recurrences as readonly string[]).includes(recurrence)
-    ? [...recurrences]
-    : [...recurrences, recurrence];
+  // Keep a non-preset lead time (e.g. from a backup) selectable.
+  const remindOptions: number[] = (remindPresets as readonly number[]).includes(remindBeforeMin)
+    ? [...remindPresets]
+    : [...remindPresets, remindBeforeMin].sort((a, b) => a - b);
 
-  function recurrenceOptionLabel(value: string): string {
-    return value in recurrenceLabelKeys
-      ? t(recurrenceLabelKeys[value as keyof typeof recurrenceLabelKeys])
-      : recurrenceLabel(value);
+  function handleIntervalChange(value: string): void {
+    setIntervalText(value);
+  }
+
+  function handleIntervalBlur(): void {
+    setIntervalText(String(parseIntervalText(intervalText)));
   }
 
   return (
@@ -231,16 +271,37 @@ export function TaskEditDialog({
               </label>
               <select
                 id="task-recurrence"
-                value={recurrence}
-                onChange={(e) => setRecurrence(e.target.value)}
+                value={freq}
+                onChange={(e) => setFreq(e.target.value as RecurrenceFreq | "")}
                 className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
-                {recurrenceOptions.map((value) => (
+                <option value="">{t("recurrenceNone")}</option>
+                {recurrenceFreqs.map((value) => (
                   <option key={value} value={value}>
-                    {recurrenceOptionLabel(value)}
+                    {t(recurrenceFreqLabelKeys[value])}
                   </option>
                 ))}
               </select>
+              {freq !== "" ? (
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="task-recurrence-interval" className="text-xs font-medium">
+                    {t("repeatEvery")}
+                  </label>
+                  <Input
+                    id="task-recurrence-interval"
+                    type="number"
+                    min={1}
+                    max={MAX_RECURRENCE_INTERVAL}
+                    value={intervalText}
+                    onChange={(e) => handleIntervalChange(e.target.value)}
+                    onBlur={handleIntervalBlur}
+                    className="h-7 w-16 text-sm"
+                  />
+                  <span className="text-muted-foreground text-xs">
+                    {recurrenceUnit(freq, interval)}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {!isSubtask ? (
@@ -258,6 +319,26 @@ export function TaskEditDialog({
                   {projects?.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {dueLocal !== "" ? (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="task-remind" className="text-xs font-medium">
+                  {t("remindLabel")}
+                </label>
+                <select
+                  id="task-remind"
+                  value={remindBeforeMin}
+                  onChange={(e) => setRemindBeforeMin(Number(e.target.value))}
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {remindOptions.map((value) => (
+                    <option key={value} value={value}>
+                      {remindOptionLabel(value)}
                     </option>
                   ))}
                 </select>

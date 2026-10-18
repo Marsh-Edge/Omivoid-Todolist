@@ -17,6 +17,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     tagIds: [],
     dueAt: 0,
     recurrence: "",
+    remindBeforeMin: 0,
     completedAt: 0,
     deletedAt: 0,
     order: 0,
@@ -80,5 +81,22 @@ describe("selectDueNotifications", () => {
     const task = makeTask({ id: "a", dueAt: NOW - 2 * HOUR });
     expect(selectDueNotifications([task], NOW, {}, HOUR).notify).toEqual([]);
     expect(selectDueNotifications([task], NOW, {}, 3 * HOUR).notify.map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("fires a lead-time reminder before the task is due", () => {
+    const task = makeTask({ id: "a", dueAt: NOW + HOUR, remindBeforeMin: 60 });
+    expect(selectDueNotifications([task], NOW, {}).notify.map((t) => t.id)).toEqual(["a"]);
+    // Still keyed on the due time, so it never repeats.
+    expect(selectDueNotifications([task], NOW, { a: task.dueAt }).notify).toEqual([]);
+  });
+
+  it("waits for a lead time that has not elapsed yet", () => {
+    const task = makeTask({ id: "a", dueAt: NOW + 3 * HOUR, remindBeforeMin: 60 });
+    expect(selectDueNotifications([task], NOW, {}).notify).toEqual([]);
+  });
+
+  it("does not fire a lead time that was missed beyond the window", () => {
+    const task = makeTask({ id: "a", dueAt: NOW + HOUR, remindBeforeMin: 5 * 24 * 60 });
+    expect(selectDueNotifications([task], NOW, {}).notify).toEqual([]);
   });
 });

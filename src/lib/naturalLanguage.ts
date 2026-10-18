@@ -11,6 +11,7 @@ import type { RecurrenceFreq, TaskPriority } from "@/types";
  *
  *   priority  !high !medium !low (!h !m !l)
  *   tags      #work #home-work
+ *   projects  @work @"deep work" (matched against existing projects only)
  *   dates     today, tomorrow, tonight, a weekday, "next week/month",
  *             "in N days/weeks/months", YYYY-MM-DD, M/D[/YYYY], "november 1"
  *   times     5pm, 9:30am, 17:00, noon, midnight, "at 8am"
@@ -33,6 +34,14 @@ export interface ParsedTask {
   tagNames: string[];
   /** Compact recurrence rule, or "" when the task does not repeat. */
   recurrence: string;
+  /**
+   * Project named by an `@token` (last one wins), or "" when none. The parser
+   * cannot look up projects, so the caller resolves the name (case-insensitive)
+   * and re-adds `projectToken` to the title when nothing matches.
+   */
+  projectName: string;
+  /** The `@token` exactly as typed, for handing back an unresolved name. */
+  projectToken: string;
 }
 
 const WEEKDAYS: Record<string, number> = {
@@ -152,12 +161,15 @@ function singularize(token: string): string {
 }
 
 export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
+  // `@"deep work"` must survive the split, so quoted tokens are matched first.
+  const tokens = input.trim().match(/@"[^"]*"|\S+/g) ?? [];
   const titleWords: string[] = [];
   const tagNames: string[] = [];
   const seenTags = new Set<string>();
   let priority: TaskPriority = "none";
   let recurrence = "";
+  let projectName = "";
+  let projectToken = "";
   let dateMs = 0;
   let hours: number | null = null;
   let minutes = 0;
@@ -194,6 +206,22 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
         tagNames.push(name);
       }
       continue;
+    }
+
+    // @project or @"multi word project" (last one wins)
+    const projectCandidate = raw.replace(/[.,;:]+$/, "");
+    if (projectCandidate.startsWith("@")) {
+      const quoted = /^@"([^"]+)"$/.exec(projectCandidate);
+      if (quoted) {
+        projectName = (quoted[1] as string).trim();
+        projectToken = projectCandidate;
+        continue;
+      }
+      if (/^@[A-Za-z0-9_-]+$/.test(projectCandidate)) {
+        projectName = projectCandidate.slice(1);
+        projectToken = projectCandidate;
+        continue;
+      }
     }
 
     // "every [N] day|week|month|year"
@@ -371,5 +399,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
     priority,
     tagNames,
     recurrence,
+    projectName,
+    projectToken,
   };
 }

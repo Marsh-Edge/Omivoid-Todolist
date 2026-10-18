@@ -8,6 +8,7 @@ import {
   type TaskUpdateInput,
 } from "./schemas";
 import { recordHistory, taskRow, type RowChange } from "./history";
+import { reconcileNoteLinks } from "./noteLinkRepository";
 import { nextDueDate, parseRecurrence } from "@/lib/recurrence";
 import type { Task, TaskStatus } from "@/types";
 
@@ -64,6 +65,7 @@ export async function createTask(
     tagIds: parsed.tagIds ?? [],
     dueAt: parsed.dueAt ?? NONE,
     recurrence: parsed.recurrence ?? "",
+    remindBeforeMin: parsed.remindBeforeMin ?? NONE,
     completedAt: NONE,
     deletedAt: NONE,
     order: timestamp,
@@ -72,6 +74,8 @@ export async function createTask(
   } satisfies Task);
 
   await getDb().tasks.add(task);
+  // A new title may satisfy links other notes already point at.
+  await reconcileNoteLinks({ syncSourceIds: [], repairTargets: [task], clearTargetIds: [] });
   recordRows("undoCreateTask", [taskRow(null, task)], options);
   return task;
 }
@@ -103,7 +107,7 @@ export async function updateTask(
   const parsed = taskUpdateInputSchema.parse(patch);
   const db = getDb();
 
-  return db.transaction("rw", db.tasks, async () => {
+  return db.transaction("rw", db.tasks, db.noteLinks, async () => {
     const existing = await db.tasks.get(id);
     if (!existing) {
       throw new Error(`Task not found: ${id}`);
@@ -118,6 +122,19 @@ export async function updateTask(
     } satisfies Task);
 
     await db.tasks.put(next);
+
+    // Keep the derived link table in step: notes rebuild this task's outgoing
+    // links, a new title can satisfy links other notes already point at.
+    const notesChanged = next.notes !== existing.notes;
+    const titleChanged = next.title !== existing.title;
+    if (notesChanged || titleChanged) {
+      await reconcileNoteLinks({
+        syncSourceIds: notesChanged ? [next.id] : [],
+        repairTargets: titleChanged ? [next] : [],
+        clearTargetIds: [],
+      });
+    }
+
     recordRows("undoEditTask", [taskRow(existing, next)], options);
     return next;
   });
@@ -224,10 +241,12 @@ export async function restoreTask(id: string): Promise<Task> {
 /** Permanent removal (used from the trash view). Cascades to descendants. */
 export async function deleteTaskPermanently(id: string): Promise<void> {
   const db = getDb();
-  await db.transaction("rw", db.tasks, async () => {
+  await db.transaction("rw", db.tasks, db.noteLinks, async () => {
     const ids = [id, ...(await collectDescendantIds(id))];
     const rows = await db.tasks.where("id").anyOf(ids).toArray();
     await db.tasks.where("id").anyOf(ids).delete();
+    // Drop the links these tasks owned and blank links pointing at them.
+    await reconcileNoteLinks({ syncSourceIds: ids, repairTargets: [], clearTargetIds: ids });
     recordRows("undoDeleteTask", rows.map((row) => taskRow(row, null)));
   });
 }

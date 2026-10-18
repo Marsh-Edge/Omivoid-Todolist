@@ -22,6 +22,10 @@ export interface DueNotificationSelection {
  * Pure selection of which tasks deserve a desktop notification right now,
  * given the set already announced. Kept free of `Notification`/Dexie so it can
  * be unit tested.
+ *
+ * A task fires at `dueAt - remindBeforeMin` (lead time) and stays eligible for
+ * `windowMs` after that instant, so a reminder set a day early still shows up
+ * on the next launch rather than being missed.
  */
 export function selectDueNotifications(
   tasks: readonly Task[],
@@ -34,7 +38,8 @@ export function selectDueNotifications(
 
   for (const task of tasks) {
     if (task.deletedAt > 0 || task.status === "done" || task.dueAt <= 0) continue;
-    if (task.dueAt <= nowMs && nowMs - task.dueAt <= windowMs) {
+    const remindAt = task.dueAt - task.remindBeforeMin * 60_000;
+    if (remindAt <= nowMs && nowMs - remindAt <= windowMs) {
       if (notified[task.id] !== task.dueAt) notify.push(task);
       next[task.id] = task.dueAt;
     }

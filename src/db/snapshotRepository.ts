@@ -4,10 +4,10 @@ import {
   snapshotDataSchema,
   snapshotMetaSchema,
   tagSchema,
-  taskSchema,
 } from "./schemas";
 import { selectSnapshotIdsToPrune, shouldTakeSnapshot } from "@/lib/snapshots";
 import { clearHistory } from "./history";
+import { rebuildNoteLinks } from "./noteLinkRepository";
 import type { SnapshotData, SnapshotMeta } from "@/types";
 
 /** How many rolling local backups to keep. */
@@ -102,13 +102,18 @@ export async function restoreSnapshot(id: string): Promise<void> {
     throw new Error(`Snapshot not found: ${id}`);
   }
 
-  await db.transaction("rw", db.tasks, db.projects, db.tags, async () => {
-    await Promise.all([db.tasks.clear(), db.projects.clear(), db.tags.clear()]);
-    await db.tasks.bulkPut(data.tasks.map((task) => taskSchema.parse(task)));
+  await db.transaction("rw", db.tasks, db.projects, db.tags, db.noteLinks, async () => {
+    await Promise.all([
+      db.tasks.clear(),
+      db.projects.clear(),
+      db.tags.clear(),
+      db.noteLinks.clear(),
+    ]);
+    await db.tasks.bulkPut(data.tasks);
     await db.projects.bulkPut(data.projects.map((project) => projectSchema.parse(project)));
     await db.tags.bulkPut(data.tags.map((tag) => tagSchema.parse(tag)));
   });
-
+  await rebuildNoteLinks();
   clearHistory();
 }
 

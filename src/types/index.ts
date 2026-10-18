@@ -47,6 +47,11 @@ export interface Task {
    * "weekly" or "daily:3" (see `src/lib/recurrence.ts`).
    */
   recurrence: string;
+  /**
+   * How many minutes before `dueAt` the reminder fires; 0 fires at the due
+   * time itself (the historical behaviour). Capped at 30 days.
+   */
+  remindBeforeMin: number;
   /** Epoch ms; 0 when the task is not completed. */
   completedAt: number;
   /** Epoch ms; 0 when the task is not deleted (trash uses a real timestamp). */
@@ -115,4 +120,19 @@ export interface SnapshotData {
   tasks: Task[];
   projects: Project[];
   tags: Tag[];
+}
+
+/**
+ * A `[[wiki link]]` found in one task's notes, stored so backlinks are an
+ * index lookup instead of a scan of every note. Derived data: rebuilt from
+ * notes on demand, never backed up or exported.
+ */
+export interface NoteLink {
+  id: string;
+  /** The task whose notes contain the link. */
+  sourceTaskId: string;
+  /** The linked task's id, or "" while the link is unresolved. */
+  targetTaskId: string;
+  /** The link text exactly as typed in the source note. */
+  targetTitle: string;
 }

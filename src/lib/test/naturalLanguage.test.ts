@@ -138,10 +138,61 @@ describe("parseQuickAdd — recurrence", () => {
   });
 });
 
+describe("parseQuickAdd — projects", () => {
+  it("parses and strips an @project token", () => {
+    const parsed = parseQuickAdd("Plan sprint @work", NOW);
+    expect(parsed.title).toBe("Plan sprint");
+    expect(parsed.projectName).toBe("work");
+    expect(parsed.projectToken).toBe("@work");
+  });
+
+  it("parses a quoted multi-word project", () => {
+    const parsed = parseQuickAdd('Review @"Deep Work" tomorrow', NOW);
+    expect(parsed.title).toBe("Review");
+    expect(parsed.projectName).toBe("Deep Work");
+    expect(parsed.projectToken).toBe('@"Deep Work"');
+  });
+
+  it("keeps the last project token and strips trailing punctuation", () => {
+    expect(parseQuickAdd("Task @a @b", NOW).projectName).toBe("b");
+    const parsed = parseQuickAdd("Task @work.", NOW);
+    expect(parsed.projectName).toBe("work");
+    expect(parsed.title).toBe("Task");
+  });
+
+  it("leaves non-project @tokens and emails in the title", () => {
+    expect(parseQuickAdd("Email a@b.com", NOW).projectName).toBe("");
+    expect(parseQuickAdd("Email a@b.com", NOW).title).toBe("Email a@b.com");
+    expect(parseQuickAdd("Note @", NOW).title).toBe("Note @");
+    expect(parseQuickAdd('Note @""', NOW).projectName).toBe("");
+  });
+
+  it("defaults to no project", () => {
+    const parsed = parseQuickAdd("Buy milk", NOW);
+    expect(parsed.projectName).toBe("");
+    expect(parsed.projectToken).toBe("");
+  });
+
+  it("falls back to the raw input when only a project token is given", () => {
+    const parsed = parseQuickAdd("@work", NOW);
+    expect(parsed.projectName).toBe("work");
+    expect(parsed.title).toBe("@work");
+  });
+});
+
 describe("parseQuickAdd — combined", () => {
   it("handles title + tag + priority + date together", () => {
     const parsed = parseQuickAdd("Submit report !high #work tomorrow 5pm", NOW);
     expect(parsed.title).toBe("Submit report");
+    expect(parsed.priority).toBe("high");
+    expect(parsed.tagNames).toEqual(["work"]);
+    expect(parsed.dueAt).toBe(at(2026, 9, 18, 17));
+  });
+
+  it("handles a quoted project alongside other tokens", () => {
+    const parsed = parseQuickAdd('Submit report !high #work @"Q4 Plan" tomorrow 5pm', NOW);
+    expect(parsed.title).toBe("Submit report");
+    expect(parsed.projectName).toBe("Q4 Plan");
     expect(parsed.priority).toBe("high");
     expect(parsed.tagNames).toEqual(["work"]);
     expect(parsed.dueAt).toBe(at(2026, 9, 18, 17));

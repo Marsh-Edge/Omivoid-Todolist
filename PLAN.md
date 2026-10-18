@@ -573,3 +573,21 @@ to the *already index-narrowed* view result, so the candidate set is bounded by 
 | Skip-to-content link + `tabIndex={-1}` main | Standard keyboard/AT affordance; `main` is focusable as the link target without entering the tab order |
 | Priority/due colors: `amber-600/red-600` + `dark:*-400` | `amber-500` fails WCAG 1.4.11 (2.1:1 as an icon) and 1.4.3 as text on white; the dark-variant pair matches the existing toaster pattern |
 | Markdown-export files cleaned rather than reverted | The feature was wired to the command palette and nearly complete; fixing the parse error + dead code was smaller and more useful than deleting it |
+
+
+## Phase 6 — Deferred limitations (STOP after this phase) — Steps 1–4 complete
+
+Deferred items (from Group 1/others):
+- Recurrence: allow custom intervals in the edit dialog — DONE (Step 1)
+- Natural language: @project token matched against existing projects only — DONE (Step 2)
+- Reminders: per-task remindBeforeMin with presets and lead-time firing — DONE (Step 3)
+- Backlinks: derived noteLinks table with indexed lookup — DONE (Step 4)
+- Stats clock: refresh at midnight and on focus/visibility — PENDING (Step 5)
+
+Dexie migration v7 adds noteLinks, adds remindBeforeMin to tasks (backfilled to 0), and adds title index.
+
+### Verification for Phase 6
+- npm run lint — 0 errors, 2 warnings only (useVirtualizer) — DONE
+- npm test — 192/192 passing — DONE
+- npm run build — static export succeeds; bundle: 1,021 KB initial JS / +229 KB lazy / 59.8 KB CSS — DONE
+

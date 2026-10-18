@@ -197,16 +197,32 @@ const en = {
   recurrenceWeekly: "Every week",
   recurrenceMonthly: "Every month",
   recurrenceYearly: "Every year",
+  recurrenceFreqDaily: "Daily",
+  recurrenceFreqWeekly: "Weekly",
+  recurrenceFreqMonthly: "Monthly",
+  recurrenceFreqYearly: "Yearly",
   recurrenceEveryCount: "Every {count} {unit}",
   recurrenceUnitDay: "days",
   recurrenceUnitWeek: "weeks",
   recurrenceUnitMonth: "months",
   recurrenceUnitYear: "years",
+  recurrenceUnitDayOne: "day",
+  recurrenceUnitWeekOne: "week",
+  recurrenceUnitMonthOne: "month",
+  recurrenceUnitYearOne: "year",
+  repeatEvery: "Every",
   taskRepeats: "Repeats {rule}",
   paletteToggleNotifications: "Toggle due notifications",
   notificationsEnabledToast: "Due notifications on.",
   notificationsDisabledToast: "Due notifications off.",
   notificationTitle: "Task due",
+  remindLabel: "Remind",
+  remindAtDue: "At due time",
+  remindMinutesBefore: "{count} minutes before",
+  remindHourBefore: "1 hour before",
+  remindHoursBefore: "{count} hours before",
+  remindDayBefore: "1 day before",
+  remindDaysBefore: "{count} days before",
   undo: "Undo",
   redo: "Redo",
   undoAction: "Undo: {action}",
@@ -287,6 +303,18 @@ const recurrenceUnitKeys: Record<RecurrenceFreq, MessageKey> = {
   monthly: "recurrenceUnitMonth",
   yearly: "recurrenceUnitYear",
 };
+
+const recurrenceUnitOneKeys: Record<RecurrenceFreq, MessageKey> = {
+  daily: "recurrenceUnitDayOne",
+  weekly: "recurrenceUnitWeekOne",
+  monthly: "recurrenceUnitMonthOne",
+  yearly: "recurrenceUnitYearOne",
+};
+
+/** Pluralized unit word for a frequency ("week" vs "weeks"). */
+export function recurrenceUnit(freq: RecurrenceFreq, count: number): string {
+  return t(count === 1 ? recurrenceUnitOneKeys[freq] : recurrenceUnitKeys[freq]);
+}
 
 /** Human-readable label for a stored recurrence rule ("Every 2 weeks"). */
 export function recurrenceLabel(recurrence: string): string {

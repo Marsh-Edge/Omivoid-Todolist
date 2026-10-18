@@ -26,6 +26,7 @@ describe("tasksToMarkdown", () => {
     tagIds: [],
     dueAt: 0,
     recurrence: "",
+    remindBeforeMin: 0,
     completedAt: 0,
     deletedAt: 0,
     order: 0,

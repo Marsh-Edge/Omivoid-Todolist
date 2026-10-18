@@ -47,6 +47,13 @@ describe("taskRepository", () => {
     expect(t.recurrence).toBe("weekly");
   });
 
+  it("defaults the reminder lead time to 0 and stores an explicit one", async () => {
+    const plain = await createTask({ title: "Plain" });
+    expect(plain.remindBeforeMin).toBe(0);
+    const early = await createTask({ title: "Early", remindBeforeMin: 30 });
+    expect(early.remindBeforeMin).toBe(30);
+  });
+
   it("reschedules a recurring task instead of completing it", async () => {
     const past = Date.now() - 5 * 24 * 60 * 60 * 1000;
     const t = await createTask({ title: "Standup", dueAt: past, recurrence: "daily" });

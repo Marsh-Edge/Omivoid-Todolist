@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { isValidRecurrence } from "@/lib/recurrence";
-import type { Project, SavedFilter, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
+import type {
+  NoteLink,
+  Project,
+  SavedFilter,
+  SnapshotData,
+  SnapshotMeta,
+  Tag,
+  Task,
+} from "@/types";
 
 /**
  * Zod schemas are the single validation gate for everything entering
@@ -23,6 +31,11 @@ export const recurrenceSchema = z
   .max(20)
   .refine(isValidRecurrence, { message: "Invalid recurrence rule" });
 
+/** Upper bound for a per-task reminder lead time (30 days). */
+export const MAX_REMIND_BEFORE_MIN = 43_200;
+
+const remindBeforeSchema = z.number().int().nonnegative().max(MAX_REMIND_BEFORE_MIN);
+
 export const taskSchema: z.ZodType<Task> = z.object({
   id: idSchema,
   title: z.string().trim().min(1).max(500),
@@ -34,12 +47,28 @@ export const taskSchema: z.ZodType<Task> = z.object({
   tagIds: z.array(idSchema).max(200),
   dueAt: timestampSchema,
   recurrence: recurrenceSchema,
+  remindBeforeMin: remindBeforeSchema,
   completedAt: timestampSchema,
   deletedAt: timestampSchema,
   order: z.number(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
+
+/**
+ * Accepts task rows written before a field existed (older JSON backups and
+ * stored snapshots), filling the sentinel defaults so they still load.
+ */
+export const legacyTaskSchema: z.ZodType<Task, unknown> = z.preprocess(
+  (value) => {
+    if (value === null || typeof value !== "object") return value;
+    const row: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+    if (!("recurrence" in row)) row.recurrence = "";
+    if (!("remindBeforeMin" in row)) row.remindBeforeMin = 0;
+    return row;
+  },
+  taskSchema,
+);
 
 export const projectSchema: z.ZodType<Project> = z.object({
   id: idSchema,
@@ -59,6 +88,13 @@ export const tagSchema: z.ZodType<Tag> = z.object({
   createdAt: timestampSchema,
 });
 
+export const noteLinkSchema: z.ZodType<NoteLink> = z.object({
+  id: idSchema,
+  sourceTaskId: idSchema,
+  targetTaskId: z.string(),
+  targetTitle: z.string().trim().min(1).max(500),
+});
+
 export const snapshotMetaSchema: z.ZodType<SnapshotMeta> = z.object({
   id: idSchema,
   createdAt: timestampSchema,
@@ -69,7 +105,7 @@ export const snapshotMetaSchema: z.ZodType<SnapshotMeta> = z.object({
 
 export const snapshotDataSchema: z.ZodType<SnapshotData> = z.object({
   id: idSchema,
-  tasks: z.array(taskSchema),
+  tasks: z.array(legacyTaskSchema),
   projects: z.array(projectSchema),
   tags: z.array(tagSchema),
 });
@@ -96,6 +132,7 @@ export const taskCreateInputSchema = z.object({
   tagIds: z.array(idSchema).max(200).optional(),
   dueAt: timestampSchema.optional(),
   recurrence: recurrenceSchema.optional(),
+  remindBeforeMin: remindBeforeSchema.optional(),
 });
 
 export const taskUpdateInputSchema = taskCreateInputSchema

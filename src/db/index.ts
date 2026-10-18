@@ -1,5 +1,15 @@
 import Dexie, { type Table } from "dexie";
-import type { Project, SavedFilter, SnapshotData, SnapshotMeta, Tag, Task } from "@/types";
+import { buildNoteLinks, buildTitleIndex } from "@/lib/noteLinks";
+import { noteLinkSchema } from "./schemas";
+import type {
+  NoteLink,
+  Project,
+  SavedFilter,
+  SnapshotData,
+  SnapshotMeta,
+  Tag,
+  Task,
+} from "@/types";
 
 export const DATABASE_NAME = "omivoid";
 
@@ -19,6 +29,7 @@ export class OmivoidDatabase extends Dexie {
   snapshots!: Table<SnapshotMeta, string>;
   snapshotData!: Table<SnapshotData, string>;
   savedFilters!: Table<SavedFilter, string>;
+  noteLinks!: Table<NoteLink, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -75,6 +86,34 @@ export class OmivoidDatabase extends Dexie {
       snapshotData: "id",
       savedFilters: "id, name, createdAt",
     });
+
+    // v7: per-task reminder lead time (`remindBeforeMin`) plus the derived
+    // `noteLinks` table. `tasks.title` becomes an index so note links can be
+    // resolved/repairs without scanning. The upgrade backfills both: the new
+    // column onto every row, and the link table from existing notes.
+    this.version(7)
+      .stores({
+        tasks:
+          "id, status, priority, dueAt, projectId, parentId, createdAt, updatedAt, deletedAt, [status+deletedAt], [projectId+deletedAt], [parentId+order], [deletedAt+order], [priority+deletedAt], *tagIds, title",
+        snapshots: "id, createdAt",
+        snapshotData: "id",
+        savedFilters: "id, name, createdAt",
+        noteLinks: "id, sourceTaskId, targetTaskId, targetTitle",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("tasks")
+          .toCollection()
+          .modify((task: Task & { remindBeforeMin?: number }) => {
+            if (task.remindBeforeMin === undefined) task.remindBeforeMin = 0;
+          });
+
+        const tasks = (await tx.table("tasks").toArray()) as Task[];
+        const links = buildNoteLinks(tasks, buildTitleIndex(tasks)).map((row) =>
+          noteLinkSchema.parse(row),
+        );
+        if (links.length > 0) await tx.table("noteLinks").bulkAdd(links);
+      });
   }
 }
 
@@ -88,4 +127,4 @@ export function getDb(): OmivoidDatabase {
   return instance;
 }
 
-export type { Project, Tag, Task };
+export type { NoteLink, Project, Tag, Task };

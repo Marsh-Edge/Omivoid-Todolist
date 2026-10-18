@@ -2,11 +2,12 @@
 
 import { useState, type FormEvent } from "react";
 import { format } from "date-fns";
-import { CalendarDays, Flag, Repeat, Tag as TagIcon } from "lucide-react";
+import { CalendarDays, Flag, Folder as FolderIcon, Repeat, Tag as TagIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createTask } from "@/db/taskRepository";
 import { createTag } from "@/db/tagRepository";
+import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
 import { toUserMessage } from "@/lib/errors";
 import { parseQuickAdd, type ParsedTask } from "@/lib/naturalLanguage";
@@ -22,11 +23,13 @@ const priorityLabelKeys: Record<Exclude<TaskPriority, "none">, MessageKey> = {
 
 /**
  * Quick-add with natural-language parsing: the title may include a due date,
- * a priority flag (`!high`) and `#tags`, which are previewed live and applied
- * on submit. New tasks land in the selected project (or Inbox).
+ * a priority flag (`!high`), `#tags` and an `@project` (matched against
+ * existing projects), which are previewed live and applied on submit. New
+ * tasks land in the named or selected project (or Inbox).
  */
 export function TaskForm() {
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const projects = useProjects();
   const tags = useTags();
   const [value, setValue] = useState("");
   const [parsed, setParsed] = useState<ParsedTask | null>(null);
@@ -64,9 +67,17 @@ export function TaskForm() {
     setIsAdding(true);
     try {
       const tagIds = await resolveTagIds(preview.tagNames);
+      const matchedProject = preview.projectName
+        ? projects?.find(
+            (project) => project.name.toLowerCase() === preview.projectName.toLowerCase(),
+          )
+        : undefined;
+      // An unmatched @name is not dropped: keep the token in the title, unless
+      // the title already fell back to the raw input (which contains it).
+      const keepToken = preview.projectToken !== "" && !matchedProject && preview.title !== value.trim();
       await createTask({
-        title: preview.title,
-        projectId: selectedProjectId ?? "",
+        title: keepToken ? `${preview.projectToken} ${preview.title}` : preview.title,
+        projectId: matchedProject?.id ?? selectedProjectId ?? "",
         dueAt: preview.dueAt,
         priority: preview.priority,
         tagIds,
@@ -103,7 +114,8 @@ export function TaskForm() {
       (parsed.dueAt > 0 ||
         parsed.priority !== "none" ||
         parsed.tagNames.length > 0 ||
-        parsed.recurrence !== "") ? (
+        parsed.recurrence !== "" ||
+        parsed.projectName !== "") ? (
         <div
           className="text-muted-foreground flex flex-wrap items-center gap-2 pl-1 text-xs"
           aria-label={t("quickAddDetectedAria")}
@@ -120,6 +132,12 @@ export function TaskForm() {
             <span className="inline-flex items-center gap-1">
               <Repeat className="size-3" aria-hidden="true" />
               {t("quickAddRepeats", { rule: recurrenceLabel(parsed.recurrence) })}
+            </span>
+          ) : null}
+          {parsed.projectName !== "" ? (
+            <span className="inline-flex items-center gap-1">
+              <FolderIcon className="size-3" aria-hidden="true" />
+              {parsed.projectName}
             </span>
           ) : null}
           {parsed.priority !== "none" ? (
