@@ -188,7 +188,8 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
   };
 
   for (let i = 0; i < tokens.length; i++) {
-    const raw = tokens[i] as string;
+    const raw = tokens[i];
+    if (raw === undefined) continue;
     const token = clean(raw);
 
     const priorityToken = PRIORITY_TOKENS[token];
@@ -213,7 +214,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
     if (projectCandidate.startsWith("@")) {
       const quoted = /^@"([^"]+)"$/.exec(projectCandidate);
       if (quoted) {
-        projectName = (quoted[1] as string).trim();
+        projectName = quoted[1]?.trim() ?? "";
         projectToken = projectCandidate;
         continue;
       }
@@ -228,12 +229,13 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
     if ((token === "every" || token === "each") && i + 1 < tokens.length) {
       let j = i + 1;
       let count = 1;
-      if (/^\d+$/.test(clean(tokens[j] as string))) {
-        count = Number(clean(tokens[j] as string));
+      const maybeCount = clean(tokens[j] ?? "");
+      if (/^\d+$/.test(maybeCount)) {
+        count = Number(maybeCount);
         j++;
       }
       if (count >= 1 && count <= 999 && j < tokens.length) {
-        const unit = singularize(clean(tokens[j] as string));
+        const unit = singularize(clean(tokens[j] ?? ""));
         const freq = UNIT_TO_FREQ[unit];
         if (freq) {
           recurrence = formatRecurrence({ freq, interval: count });
@@ -252,7 +254,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
 
     // "next <weekday|week|month>"
     if (token === "next" && i + 1 < tokens.length) {
-      const nextToken = clean(tokens[i + 1] as string);
+      const nextToken = clean(tokens[i + 1] ?? "");
       const weekday = WEEKDAYS[nextToken];
       if (weekday !== undefined) {
         setDate(nextWeekday(todayStart, weekday));
@@ -274,7 +276,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
     // "in N days|weeks|months"
     if (token === "in" && i + 2 < tokens.length) {
       const amount = Number(tokens[i + 1]);
-      const unitRaw = clean(tokens[i + 2] as string);
+      const unitRaw = clean(tokens[i + 2] ?? "");
       const unit = unitRaw.endsWith("s") ? unitRaw.slice(0, -1) : unitRaw;
       if (Number.isInteger(amount) && amount > 0) {
         if (unit === "day") {
@@ -352,7 +354,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
     // "november 1"
     const month = MONTHS[token];
     if (month !== undefined && i + 1 < tokens.length) {
-      const day = Number(clean(tokens[i + 1] as string));
+      const day = Number(clean(tokens[i + 1] ?? ""));
       if (Number.isInteger(day) && day >= 1 && day <= 31) {
         let candidate = new Date(now.getFullYear(), month, day);
         if (candidate.getTime() < todayStart) {
@@ -370,7 +372,7 @@ export function parseQuickAdd(input: string, nowMs: number): ParsedTask {
       continue;
     }
     if (token === "at" && i + 1 < tokens.length) {
-      const nextTime = parseTime(clean(tokens[i + 1] as string));
+      const nextTime = parseTime(clean(tokens[i + 1] ?? ""));
       if (nextTime) {
         setTime(nextTime.h, nextTime.m);
         i++;

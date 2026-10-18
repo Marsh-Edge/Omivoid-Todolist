@@ -160,8 +160,8 @@ function refresh(): void {
   snapshot = {
     canUndo: stack.past.length > 0,
     canRedo: stack.future.length > 0,
-    undoLabel: stack.past.length > 0 ? stack.past[stack.past.length - 1].label : null,
-    redoLabel: stack.future.length > 0 ? stack.future[0].label : null,
+    undoLabel: stack.past[stack.past.length - 1]?.label ?? null,
+    redoLabel: stack.future[0]?.label ?? null,
   };
   for (const listener of listeners) listener();
 }

@@ -34,7 +34,7 @@ describe("snapshotRepository", () => {
 
     const metas = await listSnapshots();
     expect(metas.map((m) => m.createdAt)).toEqual([2000, 1000]);
-    expect(metas[0].taskCount).toBe(2);
+    expect(metas[0]?.taskCount).toBe(2);
   });
 
   it("prunes backups beyond the maximum", async () => {
@@ -43,7 +43,7 @@ describe("snapshotRepository", () => {
     }
     const metas = await listSnapshots();
     expect(metas).toHaveLength(MAX_SNAPSHOTS);
-    expect(metas[0].createdAt).toBe(1000 + MAX_SNAPSHOTS + 2);
+    expect(metas[0]?.createdAt).toBe(1000 + MAX_SNAPSHOTS + 2);
   });
 
   it("restores a backup over the current data", async () => {
@@ -58,7 +58,7 @@ describe("snapshotRepository", () => {
 
     const tasks = await listActiveTasks();
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].title).toBe("Kept");
+    expect(tasks[0]?.title).toBe("Kept");
   });
 
   it("only creates automatic backups once the interval elapses", async () => {
@@ -89,6 +89,7 @@ describe("snapshotRepository", () => {
   it("reports a missing snapshot id", async () => {
     await createTask({ title: "Untouched" });
     await expect(restoreSnapshot("nope")).rejects.toThrow(/Snapshot not found/);
-    expect((await getTask((await listActiveTasks())[0].id))?.title).toBe("Untouched");
+    const [first] = await listActiveTasks();
+    expect(await getTask(first?.id ?? "")).toMatchObject({ title: "Untouched" });
   });
 });

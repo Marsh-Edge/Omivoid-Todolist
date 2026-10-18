@@ -284,8 +284,7 @@ export async function moveTask(
       if (!Number.isFinite(order) || order === before.order || order === after.order) {
         const group = [...siblings];
         group.splice(insertAt, 0, task);
-        for (let i = 0; i < group.length; i++) {
-          const current = group[i] as Task;
+        for (const [i, current] of group.entries()) {
           const updated = taskSchema.parse({ ...current, order: (i + 1) * 1000, updatedAt: ts } satisfies Task);
           await db.tasks.put(updated);
           changes.push(taskRow(current, updated));

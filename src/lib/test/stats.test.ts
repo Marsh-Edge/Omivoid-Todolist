@@ -111,7 +111,7 @@ describe("completionTrend", () => {
   it("clamps the window to at least one day", () => {
     const trend = completionTrend([task({ status: "done", completedAt: NOW })], NOW, 0);
     expect(trend).toHaveLength(1);
-    expect(trend[0].count).toBe(1);
+    expect(trend[0]?.count).toBe(1);
   });
 });
 
@@ -178,7 +178,7 @@ describe("topProjects", () => {
     ];
     const result = topProjects(tasks, projects, 1);
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe("p1");
+    expect(result[0]?.id).toBe("p1");
 
     const full = topProjects(tasks, projects, 10).find((p) => p.id === "ghost");
     expect(full).toMatchObject({ name: "ghost", color: "" });
