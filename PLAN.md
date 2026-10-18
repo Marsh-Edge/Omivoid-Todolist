@@ -23,6 +23,8 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 3** — Tier 1 rest: search, filters, group-by, command palette, shortcuts, import/export, dark/light mode
 - [x] **Phase 4** — Tier 2 features, in small groups (Groups 1–7 done)
 - [x] **Phase 5** — Tier 3 + polish, animations, performance audit, tests, README — **DONE** (Markdown export done; graph view / Pomodoro / timeline-lite out of scope)
+- [x] **Phase 6** — Deferred limitations (recurrence intervals, @project NL, reminders, backlinks, stats clock) — **DONE**
+- [x] **Phase 7** — Review fixes: bugs, type safety, cleanup, persisted view prefs — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -575,19 +577,99 @@ to the *already index-narrowed* view result, so the candidate set is bounded by 
 | Markdown-export files cleaned rather than reverted | The feature was wired to the command palette and nearly complete; fixing the parse error + dead code was smaller and more useful than deleting it |
 
 
-## Phase 6 � Deferred limitations (STOP after this phase) � Steps 1�5 complete
+## Phase 6 — Deferred limitations (STOP after this phase) — Steps 1–5 complete
 
 Deferred items (from Group 1/others):
-- Recurrence: allow custom intervals in the edit dialog � DONE (Step 1)
-- Natural language: @project token matched against existing projects only � DONE (Step 2)
-- Reminders: per-task remindBeforeMin with presets and lead-time firing � DONE (Step 3)
-- Backlinks: derived noteLinks table with indexed lookup � DONE (Step 4)
-- Stats clock: refresh at midnight and on focus/visibility � DONE (Step 5)
+- Recurrence: allow custom intervals in the edit dialog — DONE (Step 1)
+- Natural language: @project token matched against existing projects only — DONE (Step 2)
+- Reminders: per-task remindBeforeMin with presets and lead-time firing — DONE (Step 3)
+- Backlinks: derived noteLinks table with indexed lookup — DONE (Step 4)
+- Stats clock: refresh at midnight and on focus/visibility — DONE (Step 5)
 
 Dexie migration v7 adds noteLinks, adds remindBeforeMin to tasks (backfilled to 0), and adds title index.
 
 ### Verification for Phase 6
-- npm run lint � 0 errors, 2 warnings only (useVirtualizer) � DONE
-- npm test � 192/192 passing � DONE
-- npm run build � static export succeeds; bundle: 1,021 KB initial JS / +229 KB lazy / 59.8 KB CSS � DONE
+- npm run lint — 0 errors, 2 warnings only (useVirtualizer) — DONE
+- npm test — 192/192 passing — DONE
+- npm run build — static export succeeds; bundle: 1,021 KB initial JS / +229 KB lazy / 59.8 KB CSS — DONE
+
+## Phase 7 — Review fixes: bugs, type safety, cleanup — Steps 1–5 complete
+
+Scope agreed with the user: bugs + type safety + cleanup, plus two behavior
+changes (persist view prefs, nested project indent). One commit per step.
+
+### Step 1 — bugs and robustness (commit `7a3fa4c`)
+- **Undo/redo race**: operations are serialized through an operation queue and a
+  generation counter, so concurrent undo/redo (double-click) and an import's
+  `clearHistory()` racing an in-flight undo can no longer corrupt the stacks —
+  results are rebased onto the current stack after every await. 5 new tests.
+- **Silent failures now toast**: new `notifyError()` (console + friendly toast)
+  wired into every bare `catch` that previously only logged — TaskList row
+  actions, quick-add, tag delete, kanban drop, note autosave, snapshot/backup
+  actions, command palette. Inline `setError(toUserMessage(...))` sites keep
+  their inline messages; technical details never reach the UI.
+- **Electron static server hardened + extracted** to `electron/staticServer.ts`
+  (testable without Electron, ephemeral port): 400 on malformed percent-encoding
+  (was: handler threw), 404 for missing files with an extension or under
+  `/_next/` (was: soft-404 `index.html` answered as JS/CSS), SPA fallback only
+  for extensionless paths, `nosniff` + `Referrer-Policy: no-referrer` on every
+  response, `will-navigate` checks origin equality instead of `startsWith`
+  (prefix trick), `close()` drops idle keep-alive sockets so quit isn't delayed.
+  12 new tests. The duplicated `QUICK_ADD_CHANNEL` constant stays (sandboxed
+  preloads can't require local modules) — now documented.
+- **Wiki-link resolution** goes through the repository layer
+  (`queryActiveTaskTitles`, index-backed on `deletedAt`) instead of a raw
+  `getDb().tasks.toArray()`; dead `ready` field dropped.
+- Small fixes: dialog reset `setTimeout`s cleared on unmount; sort menu gets
+  outside-click/Escape dismissal (`useDismissable`, like the filter menus);
+  nav `aria-label` used the Inbox key (now `navViews`); `nameRequired` /
+  `addSubtaskAria` keys replace mistranslated/plain usages; orphaned Sidebar
+  comment removed; dead exports removed (`reorderTasks`, `countActiveTasks`,
+  `querySubtasks`, `useRootProjects`, `listRootProjects` +1 test).
+
+### Step 2 — type safety (commit `5fe99b8`)
+- `t()` is typed per message template: `{name}` placeholders are extracted at
+  the type level, so plain messages take **no** params, templated messages
+  require the exact complete params object (missing/unknown/extra keys are
+  compile errors), and dynamic `MessageKey` values stay loose.
+  (`addSubtask` at TaskRow was passing a `{title}` it never declared — caught
+  by this and given its own `addSubtaskAria` key in Step 1.)
+- tsconfig: `allowJs` dropped; `noUnusedLocals`, `noUnusedParameters`,
+  `noImplicitReturns` enabled. No `any` anywhere in `src/`.
+
+### Step 3 — dependency and dead-file cleanup (commit on master)
+- `shadcn` + `vite` moved to devDependencies (tooling only); unused
+  `@vitest/ui` removed; lockfile reinstalled.
+- **`allowScripts` kept — plan premise corrected**: npm 12's `install-scripts`
+  enforces this field; it is live config, not dead (unrs-resolver stays
+  approved, same behavior as baseline).
+- Deleted: `PLAN.md.temp`, `src/lib/utils.ts` (nothing imported it — every
+  component imports the `cn` package directly), empty `src/features/search/`,
+  five unreferenced create-next-app SVGs in `public/`. Dead exports:
+  `projectIcon()`, markdown-export `includeTrashed` option, preload
+  `platform`/`versions` bridge fields (+ `electron.d.ts`).
+
+### Step 4 — behavior changes (commit on master)
+- **View preferences persist across restarts** (`localStorage` key
+  `omivoid-view`): layout mode, sort field + direction, grouping, instant
+  filter chips, search query. Read back through a Zod schema — corrupt or
+  outdated blobs are discarded (defaults win), written through one store
+  subscription, hydrated once on mount like the theme (no write-back during
+  hydrate). Navigation (active view / selected project) and dialog state stay
+  session-only. 7 new tests.
+- **Nested projects indent** in the sidebar (`buildTree` now carries depth);
+  an orphaned project (its parent was deleted) renders as a root instead of
+  disappearing from the list.
+- Test setup gains an in-memory `Storage` stub — this jsdom ships no
+  `localStorage` at all.
+
+### Verification for Phase 7
+- npm run lint — 0 errors, 2 warnings only (useVirtualizer) — DONE
+- npm test — 214/214 passing (28 files) — DONE
+- npm run build — static export succeeds; bundle: ~1,259 KB JS / 60 KB CSS
+  (total `out/_next/static`, same scale as Phase 6's ~1,250 KB) — DONE
+- npm run electron:compile — clean — DONE
+- Known deviation: `allowScripts` retained (see Step 3); `queryActiveTaskTitles`
+  named instead of the planned `queryTaskTitleIds` (returns id + title pairs).
+
 
