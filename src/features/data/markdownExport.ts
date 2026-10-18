@@ -11,8 +11,6 @@ import { downloadText, timestampSlug } from "./download";
 export interface MarkdownExportOptions {
   /** Title for the exported document */
   title?: string;
-  /** Include trashed tasks (default false) */
-  includeTrashed?: boolean;
 }
 
 function buildChildrenMap(tasks: readonly Task[]): Map<string, Task[]> {
@@ -193,6 +191,5 @@ export async function exportTasksAsMarkdown(scope: "view" | "all"): Promise<numb
   );
   return tasks.length;
 }
-
 
 

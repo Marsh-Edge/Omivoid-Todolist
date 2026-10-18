@@ -4,12 +4,6 @@
  * part of the Next.js TypeScript project.
  */
 export interface OmivoidBridge {
-  readonly platform: NodeJS.Platform;
-  readonly versions: {
-    readonly electron: string;
-    readonly chrome: string;
-    readonly node: string;
-  };
   /**
    * Subscribes to the global quick-add shortcut (`Ctrl/Cmd+Alt+N`).
    * Returns an unsubscribe function.

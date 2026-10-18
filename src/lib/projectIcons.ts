@@ -48,9 +48,3 @@ const byName = new Map(PROJECT_ICONS.map((entry) => [entry.name, entry.Icon]));
 export const PROJECT_ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
   byName,
 );
-
-/** Returns the lucide component for a stored icon name, or null if unknown. */
-export function projectIcon(name: string): LucideIcon | null {
-  if (!name) return null;
-  return byName.get(name) ?? null;
-}

@@ -11,12 +11,6 @@ import { contextBridge, ipcRenderer } from "electron";
 const QUICK_ADD_CHANNEL = "omivoid:quick-add";
 
 const omivoidBridge = {
-  platform: process.platform,
-  versions: {
-    electron: process.versions.electron,
-    chrome: process.versions.chrome,
-    node: process.versions.node,
-  },
   /**
    * Subscribes to the global quick-add shortcut (`Ctrl/Cmd+Alt+N`).
    * Returns an unsubscribe function.
