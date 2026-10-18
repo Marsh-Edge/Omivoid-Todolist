@@ -27,6 +27,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 7** — Review fixes: bugs, type safety, cleanup, persisted view prefs — **DONE**
 - [x] **Phase 8** — Performance round 2 (memoized rows/cards) + `noUncheckedIndexedAccess` — **DONE**
 - [x] **Phase 9** — i18n completion pass (shell, export document, icon labels) — **DONE**
+- [x] **Phase 10** — Completed-view visibility bugfix (calendar completion date, done subtasks) — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -765,6 +766,53 @@ grammar, not display copy), and `throw` messages in `src/db/*` (technical).
 - npx tsc --noEmit — clean — DONE
 - npm run build — static export succeeds — DONE
 - npm run electron:compile — clean — DONE
+
+## Phase 10 — Completed-view visibility bugfix — Steps 1–3 complete
+
+User report: three test tasks were marked Complete, disappeared from their
+source view (the write itself worked), but never appeared under the
+Completed smart view. Investigation cleared the whole data path
+(`setTaskCompleted` → `status: "done"` + `completedAt`, the
+`[status+deletedAt]` index in every Dexie version, `matchesView`,
+the checkbox wiring) — the bug was in presentation:
+
+1. **Calendar mode** (`viewMode` persists since Phase 7): tasks were placed
+   on the month grid by `dueAt` only, and `dueAt <= 0` rows were skipped
+   entirely — finished, undated tasks collapsed into a tiny "N without a
+   due date" note (or sat in a different month), i.e. invisible.
+2. **Done subtasks matched no view**: every view's flat list dropped
+   `parentId !== ""` rows and only a qualifying parent can expand children —
+   so a completed subtask appeared in neither list, board, nor calendar.
+
+### Step 1 — calendar places completed tasks by completion date (commit `1dfb846`)
+- `lib/calendar.ts`: `groupTasksByDay`/`countWithoutDate` take an optional
+  `DayKeySelector` (default `byDueAt`; `byCompletedAt` for Completed).
+- `CalendarView` passes `byCompletedAt` when `activeView === "completed"`,
+  so the grid shows *when* tasks were finished; unset timestamps still
+  fall back to the count note.
+
+### Step 2 — completed subtasks visible (commit `86c55b1`)
+- `viewPredicates.visibleInFlatList(task, view)`: subtasks kept for the
+  Completed view only — one change covers list, board and calendar
+  (`useTasksForView` is their shared source).
+- `TaskList` disables child nesting in the Completed view (a done parent
+  and its done child would otherwise render twice: nested + flat), keeping
+  it a flat log where every finished task appears exactly once.
+- Test hardening: the pre-existing "subtask rows when parent expanded"
+  assertion used sync `getByText` on live-query content (inherently racy);
+  now awaits it.
+
+### Verification for Phase 10
+- npm run lint — 0 errors, 1 warning only (useVirtualizer) — DONE
+- npm test — 220/220 passing (28 files; +6 tests: calendar selectors ×2,
+  `visibleInFlatList` ×2, TaskList Completed ×2) — DONE
+- npx tsc --noEmit — clean — DONE
+- npm run build — static export succeeds — DONE
+- npm run electron:compile — clean — DONE
+- Bundle unchanged: ~1,261 KB JS / 60 KB CSS — DONE
+- Manual check pending in `npm run electron:dev`: complete tasks
+  (undated, dated, subtask) → visible in Completed in list, board **and**
+  calendar mode.
 
 
 
