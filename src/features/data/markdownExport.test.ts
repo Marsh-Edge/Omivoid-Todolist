@@ -3,13 +3,27 @@ import { tasksToMarkdown } from "./markdownExport";
 import type { Project, Tag, Task } from "@/types";
 
 vi.mock("@/lib/i18n", () => ({
-  t: (id: string) => {
+  t: (id: string, params?: Record<string, string | number>) => {
     const map: Record<string, string> = {
       priorityHigh: "High",
       priorityMedium: "Medium",
       priorityLow: "Low",
+      viewInbox: "Inbox",
+      groupNoProject: "No project",
+      exportMarkdownTitle: "Omivoid tasks",
+      exportMarkdownTitleView: "Omivoid tasks — current view",
+      exportMarkdownTitleAll: "Omivoid tasks — all",
+      exportMarkdownExported: "Exported {date} · {count} tasks",
+      exportMarkdownDue: "due {date}",
+      exportMarkdownRepeats: "repeats {rule}",
     };
-    return map[id] || id;
+    let value = map[id] ?? id;
+    if (params) {
+      for (const [name, replacement] of Object.entries(params)) {
+        value = value.replaceAll(`{${name}}`, String(replacement));
+      }
+    }
+    return value;
   },
   recurrenceLabel: (r: string) => (r === "weekly" ? "weekly" : r),
 }));

@@ -52,8 +52,10 @@ function taskMetadata(task: Task, tagMap: Map<string, Tag>): string[] {
   const p = priorityLabel(task);
   if (p) parts.push(p);
   const due = formatDue(task);
-  if (due) parts.push(`due ${due}`);
-  if (task.recurrence) parts.push(`repeats ${recurrenceLabel(task.recurrence)}`);
+  if (due) parts.push(t("exportMarkdownDue", { date: due }));
+  if (task.recurrence) {
+    parts.push(t("exportMarkdownRepeats", { rule: recurrenceLabel(task.recurrence) }));
+  }
   const tags = task.tagIds
     .map((id) => tagMap.get(id))
     .filter((t): t is Tag => Boolean(t))
@@ -77,14 +79,14 @@ export function tasksToMarkdown(
   tags: readonly Tag[],
   options: MarkdownExportOptions = {},
 ): string {
-  const title = options.title ?? "Omivoid tasks";
+  const title = options.title ?? t("exportMarkdownTitle");
   const exportedAt = format(Date.now(), "yyyy-MM-dd");
   const tagMap = buildTagMap(tags);
   const childrenMap = buildChildrenMap(tasks);
   const lines: string[] = [];
   lines.push(`# ${title}`);
   lines.push("");
-  lines.push(`_Exported ${exportedAt} · ${tasks.length} tasks_`);
+  lines.push(`_${t("exportMarkdownExported", { date: exportedAt, count: tasks.length })}_`);
   lines.push("");
 
   const sortedProjects = [...projects].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
@@ -92,7 +94,7 @@ export function tasksToMarkdown(
   // Group: Inbox first
   const inboxTasks = tasks.filter((t) => t.parentId === "" && t.projectId === "");
   if (inboxTasks.length > 0) {
-    lines.push("## Inbox");
+    lines.push(`## ${t("viewInbox")}`);
     lines.push("");
     for (const task of inboxTasks) {
       writeTask(task, 0, lines, tasks, childrenMap, tagMap);
@@ -113,7 +115,7 @@ export function tasksToMarkdown(
   const known = new Set(projects.map((p) => p.id));
   const noProjectTasks = tasks.filter((t) => t.parentId === "" && t.projectId !== "" && !known.has(t.projectId));
   if (noProjectTasks.length > 0) {
-    lines.push("## No project");
+    lines.push(`## ${t("groupNoProject")}`);
     lines.push("");
     for (const task of noProjectTasks) {
       writeTask(task, 0, lines, tasks, childrenMap, tagMap);
@@ -183,7 +185,9 @@ export async function exportTasksAsMarkdown(scope: "view" | "all"): Promise<numb
     if (tasks.length === 0) tasks = matched;
   }
 
-  const md = tasksToMarkdown(tasks, projects, tags, { title: scope === "view" ? "Omivoid tasks — current view" : "Omivoid tasks — all" });
+  const md = tasksToMarkdown(tasks, projects, tags, {
+    title: scope === "view" ? t("exportMarkdownTitleView") : t("exportMarkdownTitleAll"),
+  });
   downloadText(
     `omivoid-tasks-${scope}-${timestampSlug(Date.now())}.md`,
     md,
