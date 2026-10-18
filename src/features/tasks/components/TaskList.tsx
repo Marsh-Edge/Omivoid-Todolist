@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTasksForView } from "@/features/views/useTasksForView";
 import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
-import { TaskRow } from "./TaskRow";
+import { TaskRow, type TaskDragHandlers } from "./TaskRow";
 import { TaskEditDialog, type TaskEditTarget } from "./TaskEditDialog";
 import {
   deleteTaskPermanently,
@@ -23,7 +23,7 @@ import {
   groupTasks,
   type GroupLabelResolver,
 } from "@/lib/taskFilters";
-import type { Task } from "@/types";
+import type { Tag, Task } from "@/types";
 
 type FlatRow =
   | { kind: "header"; id: string; label: string }
@@ -34,6 +34,7 @@ type FlatRow =
       depth: number;
       hasChildren: boolean;
       isExpanded: boolean;
+      tags: Tag[];
     };
 
 const ROW_HEIGHT = 44;
@@ -69,6 +70,8 @@ export function TaskList() {
     new Map<string, Task[]>(),
   );
 
+  const tagById = useMemo(() => new Map((tags ?? []).map((tag) => [tag.id, tag])), [tags]);
+
   const groups = useMemo(() => {
     if (!tasks || groupBy === "none") return null;
     const projectNames = new Map(projects?.map((p) => [p.id, p.name]) ?? []);
@@ -92,6 +95,12 @@ export function TaskList() {
     if (!tasks) return [];
     const out: FlatRow[] = [];
 
+    function tagsOf(task: Task): Tag[] {
+      return task.tagIds
+        .map((id) => tagById.get(id))
+        .filter((tag): tag is Tag => tag !== undefined);
+    }
+
     function pushChildren(parentId: string, depth: number) {
       for (const child of subtasksByParent.get(parentId) ?? []) {
         const childHasChildren = parentIdsWithChildren.has(child.id);
@@ -103,6 +112,7 @@ export function TaskList() {
           depth,
           hasChildren: childHasChildren,
           isExpanded: childExpanded,
+          tags: tagsOf(child),
         });
         if (childExpanded) pushChildren(child.id, depth + 1);
       }
@@ -111,7 +121,15 @@ export function TaskList() {
     function pushTask(task: Task) {
       const hasChildren = parentIdsWithChildren.has(task.id);
       const isExpanded = hasChildren && expandedTaskIds.has(task.id);
-      out.push({ kind: "task", id: task.id, task, depth: 0, hasChildren, isExpanded });
+      out.push({
+        kind: "task",
+        id: task.id,
+        task,
+        depth: 0,
+        hasChildren,
+        isExpanded,
+        tags: tagsOf(task),
+      });
       if (isExpanded) pushChildren(task.id, 1);
     }
 
@@ -124,7 +142,7 @@ export function TaskList() {
       for (const task of tasks) pushTask(task);
     }
     return out;
-  }, [tasks, groups, parentIdsWithChildren, expandedTaskIds, subtasksByParent]);
+  }, [tasks, groups, parentIdsWithChildren, expandedTaskIds, subtasksByParent, tagById]);
 
   const taskById = useMemo(() => {
     const map = new Map<string, Task>();
@@ -143,41 +161,68 @@ export function TaskList() {
 
   const canReorder = sortBy === "order" && view !== "trash" && groupBy === "none";
 
-  function handleDragStart(task: Task) {
-    draggedIdRef.current = task.id;
-  }
+  const handleDrop = useCallback(
+    async (targetId: string) => {
+      const draggedId = draggedIdRef.current;
+      setDragOverId(null);
+      draggedIdRef.current = null;
+      if (!draggedId || draggedId === targetId) return;
+      const target = taskById.get(targetId);
+      const dragged = taskById.get(draggedId);
+      if (!target || !dragged || target.parentId !== dragged.parentId) return;
+      try {
+        await moveTask(draggedId, { afterId: targetId });
+      } catch (caught) {
+        notifyError(caught);
+      }
+    },
+    [taskById],
+  );
 
-  function handleDragOver(e: React.DragEvent, targetId: string) {
-    e.preventDefault();
-    if (draggedIdRef.current && draggedIdRef.current !== targetId) {
-      setDragOverId(targetId);
-    }
-  }
+  const dragHandlers = useMemo<TaskDragHandlers>(
+    () => ({
+      onDragStart: (_e, taskId) => {
+        draggedIdRef.current = taskId;
+      },
+      onDragOver: (e, targetId) => {
+        e.preventDefault();
+        if (draggedIdRef.current && draggedIdRef.current !== targetId) {
+          setDragOverId(targetId);
+        }
+      },
+      onDrop: (_e, targetId) => {
+        void handleDrop(targetId);
+      },
+      onDragEnd: () => setDragOverId(null),
+    }),
+    [handleDrop],
+  );
 
-  async function handleDrop(targetId: string) {
-    const draggedId = draggedIdRef.current;
-    setDragOverId(null);
-    draggedIdRef.current = null;
-    if (!draggedId || draggedId === targetId) return;
-    const target = taskById.get(targetId);
-    const dragged = taskById.get(draggedId);
-    if (!target || !dragged || target.parentId !== dragged.parentId) return;
-    try {
-      await moveTask(draggedId, { afterId: targetId });
-    } catch (caught) {
-      notifyError(caught);
-    }
-  }
-
-  function openEdit(task: Task) {
+  const onToggleExpand = useCallback(
+    (task: Task) => toggleTaskExpanded(task.id),
+    [toggleTaskExpanded],
+  );
+  const onToggleComplete = useCallback((task: Task) => {
+    void setTaskCompleted(task.id, task.status !== "done").catch(notifyError);
+  }, []);
+  const onOpenDetail = useCallback((task: Task) => setDetailTaskId(task.id), [setDetailTaskId]);
+  const onEdit = useCallback((task: Task) => {
     setDialogTarget({ task });
     setDialogOpen(true);
-  }
-
-  function openAddSubtask(task: Task) {
+  }, []);
+  const onAddSubtask = useCallback((task: Task) => {
     setDialogTarget({ parentId: task.id });
     setDialogOpen(true);
-  }
+  }, []);
+  const onTrash = useCallback((task: Task) => void trashTask(task.id).catch(notifyError), []);
+  const onRestore = useCallback(
+    (task: Task) => void restoreTask(task.id).catch(notifyError),
+    [],
+  );
+  const onDeleteForever = useCallback(
+    (task: Task) => void deleteTaskPermanently(task.id).catch(notifyError),
+    [],
+  );
 
   if (tasks === undefined) {
     return <div className="text-muted-foreground text-sm">{t("loadingTasks")}</div>;
@@ -205,8 +250,6 @@ export function TaskList() {
     );
   }
 
-  const tagById = new Map(tags?.map((tag) => [tag.id, tag]) ?? []);
-
   return (
     <>
       <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
@@ -230,9 +273,6 @@ export function TaskList() {
                 </div>
               );
             }
-            const rowTags = row.task.tagIds
-              .map((id) => tagById.get(id))
-              .filter((tag) => tag !== undefined);
             return (
               <div key={row.id} style={positionStyle}>
                 <TaskRow
@@ -241,29 +281,17 @@ export function TaskList() {
                   view={view}
                   hasChildren={row.hasChildren}
                   isExpanded={row.isExpanded}
-                  tags={rowTags}
-                  dragHandleProps={
-                    canReorder
-                      ? {
-                          draggable: true,
-                          onDragStart: () => handleDragStart(row.task),
-                          onDragOver: (e) => handleDragOver(e, row.task.id),
-                          onDrop: () => void handleDrop(row.task.id),
-                          onDragEnd: () => setDragOverId(null),
-                          isDragOver: dragOverId === row.task.id,
-                        }
-                      : undefined
-                  }
-                  onToggleExpand={() => toggleTaskExpanded(row.task.id)}
-                  onToggleComplete={() =>
-                    void setTaskCompleted(row.task.id, row.task.status !== "done").catch(notifyError)
-                  }
-                  onOpenDetail={() => setDetailTaskId(row.task.id)}
-                  onEdit={() => openEdit(row.task)}
-                  onAddSubtask={() => openAddSubtask(row.task)}
-                  onTrash={() => void trashTask(row.task.id).catch(notifyError)}
-                  onRestore={() => void restoreTask(row.task.id).catch(notifyError)}
-                  onDeleteForever={() => void deleteTaskPermanently(row.task.id).catch(notifyError)}
+                  tags={row.tags}
+                  dragHandlers={canReorder ? dragHandlers : undefined}
+                  isDragOver={dragOverId === row.task.id}
+                  onToggleExpand={onToggleExpand}
+                  onToggleComplete={onToggleComplete}
+                  onOpenDetail={onOpenDetail}
+                  onEdit={onEdit}
+                  onAddSubtask={onAddSubtask}
+                  onTrash={onTrash}
+                  onRestore={onRestore}
+                  onDeleteForever={onDeleteForever}
                 />
               </div>
             );

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { format } from "date-fns";
 import { CalendarDays, Flag, MoreHorizontal } from "lucide-react";
 import { cn } from "cn";
@@ -30,17 +31,17 @@ const allStatuses: readonly TaskStatus[] = ["todo", "in_progress", "done"];
 export interface BoardCardProps {
   task: Task;
   projectName?: string;
-  tags: readonly Tag[];
-  onOpen: () => void;
-  onMoveTo: (status: TaskStatus) => void;
-  onDragStart: () => void;
+  tagById: ReadonlyMap<string, Tag>;
+  onOpen: (taskId: string) => void;
+  onMoveTo: (taskId: string, status: TaskStatus) => void;
+  onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
 }
 
-export function BoardCard({
+export const BoardCard = memo(function BoardCard({
   task,
   projectName,
-  tags,
+  tagById,
   onOpen,
   onMoveTo,
   onDragStart,
@@ -48,11 +49,18 @@ export function BoardCard({
 }: BoardCardProps) {
   const isDone = task.status === "done";
   const priority = task.priority !== "none" ? priorityColors[task.priority] : null;
+  const tags = useMemo(
+    () =>
+      task.tagIds
+        .map((id) => tagById.get(id))
+        .filter((tag): tag is Tag => tag !== undefined),
+    [task.tagIds, tagById],
+  );
 
   return (
     <article
       draggable
-      onDragStart={onDragStart}
+      onDragStart={() => onDragStart(task.id)}
       onDragEnd={onDragEnd}
       className="bg-card hover:bg-muted/60 group flex h-[76px] w-full cursor-grab flex-col overflow-hidden rounded-md border p-2 text-left shadow-sm transition-colors active:cursor-grabbing"
     >
@@ -60,7 +68,7 @@ export function BoardCard({
         {priority ? <Flag className={cn("mt-0.5 size-3 shrink-0", priority)} aria-hidden="true" /> : null}
         <button
           type="button"
-          onClick={onOpen}
+          onClick={() => onOpen(task.id)}
           className={cn(
             "min-w-0 flex-1 text-left text-sm line-clamp-2",
             isDone && "text-muted-foreground line-through",
@@ -84,7 +92,7 @@ export function BoardCard({
             {allStatuses
               .filter((status) => status !== task.status)
               .map((status) => (
-                <DropdownMenuItem key={status} onSelect={() => onMoveTo(status)}>
+                <DropdownMenuItem key={status} onSelect={() => onMoveTo(task.id, status)}>
                   {t(statusLabelKeys[status])}
                 </DropdownMenuItem>
               ))}
@@ -114,4 +122,4 @@ export function BoardCard({
       </div>
     </article>
   );
-}
+});

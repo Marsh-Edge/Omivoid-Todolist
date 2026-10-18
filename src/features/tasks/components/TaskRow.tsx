@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent } from "react";
+import { memo, type MouseEvent } from "react";
 import {
   CalendarDays,
   Check,
@@ -27,6 +27,17 @@ const priorityColors: Record<Exclude<TaskPriority, "none">, string> = {
   high: "text-red-500 dark:text-red-400",
 };
 
+/**
+ * Shared, stable drag handlers. Each receives the calling row's `taskId` so
+ * the parent can create them once instead of one closure per row.
+ */
+export interface TaskDragHandlers {
+  onDragStart: (e: React.DragEvent, taskId: string) => void;
+  onDragOver: (e: React.DragEvent, taskId: string) => void;
+  onDrop: (e: React.DragEvent, taskId: string) => void;
+  onDragEnd: () => void;
+}
+
 export interface TaskRowProps {
   task: Task;
   depth: number;
@@ -34,33 +45,28 @@ export interface TaskRowProps {
   hasChildren: boolean;
   isExpanded: boolean;
   tags: readonly Tag[];
-  /** null disables drag & drop (e.g. non-manual sort, trash view). */
-  dragHandleProps?: {
-    draggable: true;
-    onDragStart: (e: React.DragEvent) => void;
-    onDragOver: (e: React.DragEvent) => void;
-    onDrop: (e: React.DragEvent) => void;
-    onDragEnd: () => void;
-    isDragOver: boolean;
-  };
-  onToggleExpand: () => void;
-  onToggleComplete: () => void;
-  onOpenDetail: () => void;
-  onEdit: () => void;
-  onAddSubtask: () => void;
-  onTrash: () => void;
-  onRestore: () => void;
-  onDeleteForever: () => void;
+  /** undefined disables drag & drop (e.g. non-manual sort, trash view). Must be stable. */
+  dragHandlers?: TaskDragHandlers;
+  isDragOver?: boolean;
+  onToggleExpand: (task: Task) => void;
+  onToggleComplete: (task: Task) => void;
+  onOpenDetail: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onAddSubtask: (task: Task) => void;
+  onTrash: (task: Task) => void;
+  onRestore: (task: Task) => void;
+  onDeleteForever: (task: Task) => void;
 }
 
-export function TaskRow({
+export const TaskRow = memo(function TaskRow({
   task,
   depth,
   view,
   hasChildren,
   isExpanded,
   tags,
-  dragHandleProps,
+  dragHandlers,
+  isDragOver = false,
   onToggleExpand,
   onToggleComplete,
   onOpenDetail,
@@ -74,7 +80,6 @@ export function TaskRow({
   const isTrashView = view === "trash";
   const showDue = task.dueAt > 0 && !isDone && !isTrashView;
   // Snapshot timestamp for due-state rendering; safe (no re-render loop).
-  // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
   const dueOverdue = showDue && isOverdue(task.dueAt, nowMs);
   const dueToday = showDue && isToday(task.dueAt, nowMs);
@@ -82,28 +87,28 @@ export function TaskRow({
 
   function handleTitleClick(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
-    onOpenDetail();
+    onOpenDetail(task);
   }
 
   return (
     <div
       className={cn(
         "group flex h-11 items-center gap-2 rounded-lg px-2 transition-colors hover:bg-muted/60",
-        dragHandleProps?.isDragOver && "bg-accent ring-1 ring-ring",
+        isDragOver && "bg-accent ring-1 ring-ring",
         depth > 0 && "text-[0.925em]",
       )}
       style={depth > 0 ? { paddingLeft: `${0.5 + depth * 1.25}rem` } : undefined}
-      {...(dragHandleProps
+      {...(dragHandlers
         ? {
             draggable: true,
-            onDragStart: dragHandleProps.onDragStart,
-            onDragOver: dragHandleProps.onDragOver,
-            onDrop: dragHandleProps.onDrop,
-            onDragEnd: dragHandleProps.onDragEnd,
+            onDragStart: (e: React.DragEvent) => dragHandlers.onDragStart(e, task.id),
+            onDragOver: (e: React.DragEvent) => dragHandlers.onDragOver(e, task.id),
+            onDrop: (e: React.DragEvent) => dragHandlers.onDrop(e, task.id),
+            onDragEnd: dragHandlers.onDragEnd,
           }
         : {})}
     >
-      {dragHandleProps ? (
+      {dragHandlers ? (
         <span
           className="cursor-grab text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
           aria-hidden="true"
@@ -115,7 +120,7 @@ export function TaskRow({
       {hasChildren ? (
         <button
           type="button"
-          onClick={onToggleExpand}
+          onClick={() => onToggleExpand(task)}
           aria-expanded={isExpanded}
           aria-label={
             isExpanded
@@ -138,7 +143,7 @@ export function TaskRow({
           type="button"
           role="checkbox"
           aria-checked={isDone}
-          onClick={onToggleComplete}
+          onClick={() => onToggleComplete(task)}
           aria-label={
             isDone ? t("markIncomplete", { title: task.title }) : t("markComplete", { title: task.title })
           }
@@ -214,7 +219,7 @@ export function TaskRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={onRestore}
+              onClick={() => onRestore(task)}
               aria-label={t("restoreTask", { title: task.title })}
             >
               <RotateCcw aria-hidden="true" />
@@ -223,7 +228,7 @@ export function TaskRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={onDeleteForever}
+              onClick={() => onDeleteForever(task)}
               aria-label={t("deleteForever", { title: task.title })}
             >
               <Trash aria-hidden="true" />
@@ -235,7 +240,7 @@ export function TaskRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={onEdit}
+              onClick={() => onEdit(task)}
               aria-label={t("editTask", { title: task.title })}
             >
               <Pencil aria-hidden="true" />
@@ -244,7 +249,7 @@ export function TaskRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={onAddSubtask}
+              onClick={() => onAddSubtask(task)}
               aria-label={t("addSubtaskAria", { title: task.title })}
             >
               <Plus aria-hidden="true" />
@@ -253,7 +258,7 @@ export function TaskRow({
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={onTrash}
+              onClick={() => onTrash(task)}
               aria-label={t("deleteTask", { title: task.title })}
             >
               <Trash2 aria-hidden="true" />
@@ -263,4 +268,4 @@ export function TaskRow({
       </span>
     </div>
   );
-}
+});

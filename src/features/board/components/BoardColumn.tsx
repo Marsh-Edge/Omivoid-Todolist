@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "cn";
 import { BoardCard } from "./BoardCard";
@@ -10,21 +10,23 @@ import type { Tag, Task, TaskStatus } from "@/types";
 const ITEM_HEIGHT = 84;
 
 export interface BoardColumnProps {
+  status: TaskStatus;
   label: string;
   tasks: readonly Task[];
   projectNames: Map<string, string>;
   tagById: Map<string, Tag>;
   isDragOver: boolean;
   emptyLabel: string;
-  onDragOverColumn: (e: React.DragEvent) => void;
-  onDropColumn: () => void;
+  onDragOverColumn: (e: React.DragEvent, status: TaskStatus) => void;
+  onDropColumn: (status: TaskStatus) => void;
   onCardDragStart: (id: string) => void;
   onCardDragEnd: () => void;
   onCardOpen: (id: string) => void;
   onCardMove: (id: string, status: TaskStatus) => void;
 }
 
-export function BoardColumn({
+export const BoardColumn = memo(function BoardColumn({
+  status,
   label,
   tasks,
   projectNames,
@@ -50,8 +52,8 @@ export function BoardColumn({
   return (
     <section
       aria-label={label}
-      onDragOver={onDragOverColumn}
-      onDrop={onDropColumn}
+      onDragOver={(e) => onDragOverColumn(e, status)}
+      onDrop={() => onDropColumn(status)}
       className={cn(
         "bg-muted/20 flex h-full w-[280px] shrink-0 flex-col rounded-lg border",
         isDragOver && "ring-ring ring-2",
@@ -86,12 +88,10 @@ export function BoardColumn({
                   <BoardCard
                     task={task}
                     projectName={task.projectId ? projectNames.get(task.projectId) : undefined}
-                    tags={task.tagIds
-                      .map((id) => tagById.get(id))
-                      .filter((tag): tag is Tag => tag !== undefined)}
-                    onOpen={() => onCardOpen(task.id)}
-                    onMoveTo={(status) => onCardMove(task.id, status)}
-                    onDragStart={() => onCardDragStart(task.id)}
+                    tagById={tagById}
+                    onOpen={onCardOpen}
+                    onMoveTo={onCardMove}
+                    onDragStart={onCardDragStart}
                     onDragEnd={onCardDragEnd}
                   />
                 </div>
@@ -102,4 +102,4 @@ export function BoardColumn({
       )}
     </section>
   );
-}
+});

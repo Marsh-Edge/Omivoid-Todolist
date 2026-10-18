@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTasksForView } from "@/features/views/useTasksForView";
 import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
@@ -54,17 +54,47 @@ export default function KanbanBoard() {
   );
   const tagById = useMemo(() => new Map((tags ?? []).map((tag) => [tag.id, tag])), [tags]);
 
-  function setDragOver(status: TaskStatus | null) {
+  const setDragOver = useCallback((status: TaskStatus | null) => {
     if (dragOverRef.current === status) return;
     dragOverRef.current = status;
     setDragOverStatus(status);
-  }
+  }, []);
 
-  function handleDrop(id: string, status: TaskStatus) {
-    const task = tasks?.find((item) => item.id === id);
-    if (!task || task.status === status) return;
-    void moveTaskToStatus(id, status);
-  }
+  const handleDrop = useCallback(
+    (id: string, status: TaskStatus) => {
+      const task = tasks?.find((item) => item.id === id);
+      if (!task || task.status === status) return;
+      void moveTaskToStatus(id, status);
+    },
+    [tasks],
+  );
+
+  const onDragOverColumn = useCallback(
+    (e: React.DragEvent, status: TaskStatus) => {
+      e.preventDefault();
+      setDragOver(status);
+    },
+    [setDragOver],
+  );
+
+  const onDropColumn = useCallback(
+    (status: TaskStatus) => {
+      const id = draggedIdRef.current;
+      draggedIdRef.current = null;
+      setDragOver(null);
+      if (id) handleDrop(id, status);
+    },
+    [handleDrop, setDragOver],
+  );
+
+  const onCardDragStart = useCallback((id: string) => {
+    draggedIdRef.current = id;
+  }, []);
+
+  const onCardDragEnd = useCallback(() => {
+    draggedIdRef.current = null;
+    setDragOver(null);
+  }, [setDragOver]);
 
   if (!tasks) {
     return <div className="text-muted-foreground text-sm">{t("loadingTasks")}</div>;
@@ -76,29 +106,17 @@ export default function KanbanBoard() {
         {groups.map((group) => (
           <BoardColumn
             key={group.status}
+            status={group.status}
             label={t(columnLabelKeys[group.status])}
             tasks={group.tasks}
             projectNames={projectNames}
             tagById={tagById}
             isDragOver={dragOverStatus === group.status}
             emptyLabel={t("boardEmptyColumn")}
-            onDragOverColumn={(e) => {
-              e.preventDefault();
-              setDragOver(group.status);
-            }}
-            onDropColumn={() => {
-              const id = draggedIdRef.current;
-              draggedIdRef.current = null;
-              setDragOver(null);
-              if (id) handleDrop(id, group.status);
-            }}
-            onCardDragStart={(id) => {
-              draggedIdRef.current = id;
-            }}
-            onCardDragEnd={() => {
-              draggedIdRef.current = null;
-              setDragOver(null);
-            }}
+            onDragOverColumn={onDragOverColumn}
+            onDropColumn={onDropColumn}
+            onCardDragStart={onCardDragStart}
+            onCardDragEnd={onCardDragEnd}
             onCardOpen={setDetailTaskId}
             onCardMove={handleDrop}
           />
