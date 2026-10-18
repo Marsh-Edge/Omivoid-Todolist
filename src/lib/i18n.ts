@@ -22,6 +22,8 @@ const en = {
   markIncomplete: "Mark “{title}” as incomplete",
   deleteTask: "Delete “{title}”",
   errorGeneric: "Something went wrong. Please try again.",
+  errorBoundaryTitle: "Something went wrong",
+  errorBoundaryBody: "The application encountered an error. Please reload.",
   errorEmptyTitle: "Please enter a task title.",
   viewInbox: "Inbox",
   viewToday: "Today",

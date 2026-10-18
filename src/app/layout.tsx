@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { t } from "@/lib/i18n";
 
 const spaceGrotesk = localFont({
   src: "./fonts/SpaceGrotesk-Variable.woff2",
@@ -12,7 +13,7 @@ const spaceGrotesk = localFont({
 
 export const metadata: Metadata = {
   title: "Omivoid",
-  description: "Local-first task manager",
+  description: t("tagline"),
 };
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem("omivoid-theme");var d=t?t==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})();`;

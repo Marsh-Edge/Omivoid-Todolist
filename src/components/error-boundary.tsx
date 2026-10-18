@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, type ReactNode } from "react";
+import { t } from "@/lib/i18n";
 
 export class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
@@ -20,8 +21,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { hasError
     if (this.state.hasError) {
       return (
         <div className="flex h-screen flex-col items-center justify-center gap-2 p-4 text-center">
-          <h1 className="text-lg font-semibold">Something went wrong</h1>
-          <p className="text-muted-foreground text-sm">The application encountered an error. Please reload.</p>
+          <h1 className="text-lg font-semibold">{t("errorBoundaryTitle")}</h1>
+          <p className="text-muted-foreground text-sm">{t("errorBoundaryBody")}</p>
         </div>
       );
     }
