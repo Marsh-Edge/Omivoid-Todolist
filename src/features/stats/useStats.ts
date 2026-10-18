@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { listActiveTasks } from "@/db/taskRepository";
 import { listProjects } from "@/db/projectRepository";
@@ -43,7 +43,37 @@ export interface StatsData {
 export function useStats(): StatsData | undefined {
   const tasks = useLiveQuery(() => listActiveTasks(), []);
   const projects = useLiveQuery(() => listProjects(), []);
-  const [nowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    const onFocus = () => setNowMs(Date.now());
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") setNowMs(Date.now());
+    };
+    const onDayChange = () => setNowMs(Date.now());
+    let midnightTimer: number | undefined;
+    function scheduleMidnight(): void {
+      if (midnightTimer !== undefined) window.clearTimeout(midnightTimer);
+      const now = Date.now();
+      const d = new Date(now);
+      d.setHours(24, 0, 0, 0);
+      const ms = d.getTime() - now;
+      midnightTimer = window.setTimeout(() => {
+        onDayChange();
+        scheduleMidnight();
+      }, ms);
+    }
+    scheduleMidnight();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (midnightTimer !== undefined) window.clearTimeout(midnightTimer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   return useMemo(() => {
     if (!tasks || !projects) return undefined;
