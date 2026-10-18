@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { getDb, type OmivoidDatabase } from "@/db/index";
-import { createTask } from "@/db/taskRepository";
+import { createTask, setTaskCompleted } from "@/db/taskRepository";
 import useAppStore from "@/store/appStore";
 import { t } from "@/lib/i18n";
 import { TaskList } from "./TaskList";
@@ -65,5 +65,31 @@ describe("TaskList", () => {
     render(<TaskList />);
     expect(await screen.findByText("Parent task")).toBeTruthy();
     expect(await screen.findByText("Child task")).toBeTruthy();
+  });
+
+  it("renders finished subtasks in the Completed view", async () => {
+    const parent = await createTask({ title: "Parent done" });
+    const child = await createTask({ title: "Child done", parentId: parent.id });
+    await setTaskCompleted(parent.id, true);
+    await setTaskCompleted(child.id, true);
+    useAppStore.setState({ activeView: "completed" });
+    render(<TaskList />);
+    expect(await screen.findByText("Parent done")).toBeTruthy();
+    expect(screen.getByText("Child done")).toBeTruthy();
+  });
+
+  it("keeps the Completed view flat — an expanded done parent never duplicates its child", async () => {
+    const parent = await createTask({ title: "Parent flat" });
+    const child = await createTask({ title: "Child flat", parentId: parent.id });
+    await setTaskCompleted(parent.id, true);
+    await setTaskCompleted(child.id, true);
+    useAppStore.setState({
+      activeView: "completed",
+      expandedTaskIds: new Set<string>([parent.id]),
+    });
+    render(<TaskList />);
+    expect(await screen.findByText("Child flat")).toBeTruthy();
+    expect(screen.getAllByText("Child flat")).toHaveLength(1);
+    expect(screen.getAllByText("Parent flat")).toHaveLength(1);
   });
 });

@@ -54,3 +54,13 @@ export function matchesView(task: Task, view: SmartView, nowMs: number): boolean
   if (view === "inbox") return isInbox(task);
   return false;
 }
+
+/**
+ * Whether a task shows as a row in the active view's flat list (the list,
+ * board and calendar all build on it). Every view lists top-level tasks
+ * only; the Completed view additionally keeps finished subtasks, because a
+ * completed child would otherwise appear in no view at all.
+ */
+export function visibleInFlatList(task: Task, view: SmartView): boolean {
+  return view === "completed" || task.parentId === "";
+}

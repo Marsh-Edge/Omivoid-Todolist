@@ -94,6 +94,9 @@ export function TaskList() {
   const rows = useMemo<FlatRow[]>(() => {
     if (!tasks) return [];
     const out: FlatRow[] = [];
+    // The Completed view is a flat log of finished tasks: nested expansion
+    // would render a done child twice (under its done parent and on its own).
+    const expandable = view !== "completed";
 
     function tagsOf(task: Task): Tag[] {
       return task.tagIds
@@ -119,7 +122,7 @@ export function TaskList() {
     }
 
     function pushTask(task: Task) {
-      const hasChildren = parentIdsWithChildren.has(task.id);
+      const hasChildren = expandable && parentIdsWithChildren.has(task.id);
       const isExpanded = hasChildren && expandedTaskIds.has(task.id);
       out.push({
         kind: "task",
@@ -142,7 +145,7 @@ export function TaskList() {
       for (const task of tasks) pushTask(task);
     }
     return out;
-  }, [tasks, groups, parentIdsWithChildren, expandedTaskIds, subtasksByParent, tagById]);
+  }, [tasks, groups, parentIdsWithChildren, expandedTaskIds, subtasksByParent, tagById, view]);
 
   const taskById = useMemo(() => {
     const map = new Map<string, Task>();

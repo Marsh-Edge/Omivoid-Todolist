@@ -2,6 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { queryTasksForView } from "@/db/taskQueries";
+import { visibleInFlatList } from "@/lib/viewPredicates";
 import useAppStore from "@/store/appStore";
 import type { Task } from "@/types";
 
@@ -36,8 +37,10 @@ export function useTasksForView(): Task[] | undefined {
         if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
-      // Top-level tasks only in the flat list; subtasks render when expanded.
-      return sorted.filter((t) => t.parentId === "");
+      // Top-level tasks only in the flat list (subtasks render when
+      // expanded); the Completed view also keeps finished subtasks so a
+      // completed child never disappears from every view.
+      return sorted.filter((t) => visibleInFlatList(t, view));
     },
     // `filters` is a stable reference between store updates; list its fields so
     // a mutation of any filter re-runs the live query.
