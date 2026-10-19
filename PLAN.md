@@ -834,4 +834,50 @@ was never rendered, and the header started straight at the search field.
 - npm run electron:compile — clean — DONE
 
 
+## Phase 12 — Command palette crash fix — complete
+
+User report: clicking the palette button (or a button inside the palette) in
+the packaged app showed "Something went wrong" and bricked the app — the
+ErrorBoundary has no recovery path in the packaged build (no menu/devtools).
+
+- **Diagnosed via CDP reproduction** (Phase 12 Step 0): launched the packaged
+  exe with `--user-data-dir=<copy of the real profile>` +
+  `--remote-debugging-port=9222`, drove it with a dependency-free Node CDP
+  script. Every palette interaction crashed with
+  `TypeError: Cannot read properties of undefined (reading 'subscribe')` from
+  cmdk's context hook.
+- **Root cause** (present since Phase 2, never caught — no test rendered the
+  palette): `CommandDialog` in `src/components/ui/command.tsx` rendered its
+  children directly inside `DialogContent` without wrapping them in the cmdk
+  `<Command>` provider. Every cmdk primitive (`CommandInput`, `CommandList`,
+  `CommandEmpty`, `CommandItem`, …) reads the Command context via
+  `useContext` and immediately calls `.subscribe` on the result — `undefined`
+  without the provider → throw → ErrorBoundary on palette open.
+- **Fix**: `CommandDialog` now wraps `{children}` in `<Command>` (rounded to
+  match the dialog shell).
+- **Regression tests** (first tests the palette ever had):
+  `src/components/CommandPalette.test.tsx` — items render (the exact
+  regression), view selection switches `activeView` + closes the palette,
+  theme cycling and search clearing actions work. Router/navigation mocked.
+- **ErrorBoundary hardening**: fallback now has a **Reload app** button
+  (`window.location.reload()`), so a future render crash is recoverable in the
+  packaged app instead of bricking it. New key `errorBoundaryReload`;
+  `src/components/error-boundary.test.tsx` covers fallback + children paths.
+- **Verified end-to-end on the rebuilt package** (CDP script against
+  `release\win-unpacked\Omivoid.exe` with a fresh profile copy): palette opens
+  with 20 items; Cycle theme, Completed view, Statistics navigation
+  (router.push → `/stats` incl. RSC payload + lazy chunk), Add a task (focus
+  lands on quick-add), Undo/Redo (empty-stack no-ops) — all steps
+  `boundary: false`, zero console errors. Observed once during diagnosis: a
+  benign prefetch 404 for `__next.!KGFwcCk…__PAGE__.txt` (segment prefetch;
+  navigation itself is clean — no user-visible impact).
+
+### Verification for Phase 12
+- npm run lint — 0 errors, 1 warning only (useVirtualizer) — DONE
+- npm test — 226/226 passing (30 files, +6 new) — DONE
+- npm run build — static export succeeds — DONE
+- npm run electron:build — repackage + CDP re-verify pass — DONE
+
+
+
 
