@@ -114,6 +114,25 @@ Notes:
 - The packaged `app.asar` is ~1.4 MB: only the static export and the compiled shell are included — runtime `node_modules` are excluded (the shell uses Electron/Node built-ins only).
 - On Linux, the system tray needs a desktop environment with AppIndicator support.
 
+### Release verification & SmartScreen
+
+Release builds are **unsigned** (no code-signing certificate), so Windows
+SmartScreen may warn "Windows protected your PC" on first run — click
+**More info → Run anyway**. Verify the download integrity instead with the
+published checksums:
+
+```bash
+npm run release:checksums   # writes release/SHA256SUMS.txt (sha256sum format)
+```
+
+On Windows: `Get-FileHash .\Omivoid-<version>-setup.exe -Algorithm SHA256`
+and compare against `SHA256SUMS.txt`; on Linux: `sha256sum -c SHA256SUMS.txt`.
+
+Hardening applied in production builds: strict hash-based CSP served by the
+loopback static server, Electron fuses (ASAR integrity, `RunAsNode` off, etc.),
+DevTools disabled, permission lockdown (notifications only), a non-loopback
+request guard, and no external network access of any kind.
+
 ## Architecture pointers
 
 | Area | Where |

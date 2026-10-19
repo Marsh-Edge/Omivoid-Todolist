@@ -29,6 +29,9 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 9** — i18n completion pass (shell, export document, icon labels) — **DONE**
 - [x] **Phase 10** — Completed-view visibility bugfix (calendar completion date, done subtasks) — **DONE**
 - [x] **Phase 11** — Brand visibility: "Omivoid Todolist" in header + tab title — **DONE**
+- [x] **Phase 12** — Command palette crash fix (cmdk provider + ErrorBoundary reload) — **DONE**
+- [x] **Phase 13** — Project deletion from the sidebar (cascade to Inbox + undo) — **DONE**
+- [x] **Phase 14** — Security hardening for release (CSP, fuses, permission lockdown, checksums) — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -911,6 +914,92 @@ User report: projects are permanent — they can be created but never deleted.
 - npm test — 230/230 passing (30 files, +4 new) — DONE
 - npm run build — static export succeeds — DONE
 - npm run electron:compile — clean — DONE
+
+## Phase 14 — Security hardening for release — complete
+
+Goal: lock the production desktop build down (local-only is a hard project
+rule) before release. User decisions: (1) **strict hash-based CSP** — no
+`'unsafe-inline'` for scripts, hashes computed at static-server startup;
+(2) **unsigned release** — ship SHA-256 checksums and document the
+SmartScreen prompt instead of buying a code-signing certificate.
+`notifications` is the only OS permission granted (due-task reminders need
+it).
+
+- **Strict CSP (electron/staticServer.ts)**: `buildCsp()` hashes every inline
+  `<script>` found in `out/**/*.html` at startup
+  (`collectInlineScriptHashes()`) and serves
+  `script-src 'self' 'sha256-…'` on every response (incl. 400/403/404).
+  Full policy: `default-src 'self'; style-src 'self' 'unsafe-inline'; img-src
+  'self' data:; font-src 'self'; connect-src 'self'; object-src 'none';
+  frame-src 'none'; worker-src 'self'; base-uri 'self'; form-action 'self';
+  frame-ancestors 'none'`, plus `X-Frame-Options: DENY`,
+  `Cross-Origin-Resource-Policy: same-origin`, deny-all
+  Permissions-Policy, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`. Safety fallback: if the scan finds no
+  inline scripts at all (should not happen), degrade to `'unsafe-inline'`
+  with a console.error so the app can never brick.
+- **DNS-rebinding guard**: requests are answered only when the `Host`
+  header is one of `127.0.0.1:<port>` / `localhost:<port>` /
+  `[::1]:<port>` (port taken from the actual `server.address()`, not
+  hardcoded) — otherwise 403. An attacker-controlled domain resolving to
+  loopback cannot read the origin.
+- **Permission lockdown (electron/main.ts)**:
+  `setPermissionRequestHandler` / `setPermissionCheckHandler` /
+  `setDevicePermissionHandler` all route through
+  `electron/requestGuard.ts:isAllowedPermission` — only `notifications`
+  is allowed; camera/mic/geolocation/etc. are denied.
+- **Production request guard**: `session.webRequest.onBeforeRequest`
+  (production only) cancels non-loopback requests
+  (`isAllowedRequest`: ws/wss always cancelled when non-loopback;
+  blob/data/devtools pass) and logs `[omivoid] blocked non-local request`.
+  In practice the CSP and the existing `will-navigate` handler intercept
+  renderer paths first — this is defense in depth; the predicate itself is
+  unit-tested.
+- **Shell hardening**: `devTools: false` in production;
+  `will-attach-webview` prevented (no `<webview>` usage exists).
+- **Electron fuses (electron-builder.yml `electronFuses`)**: RunAsNode
+  Disabled, CookieEncryption Enabled, NodeOptions Disabled, NodeCliInspect
+  Disabled, EmbeddedAsarIntegrityValidation Enabled, OnlyLoadAppFromAsar
+  Enabled, GrantFileProtocolExtraPrivileges Disabled — verified by reading
+  the fuses back from the packaged exe (`@electron/fuses`), all applied.
+- **Checksums**: `scripts/checksums.mjs` + `npm run release:checksums` →
+  `release/SHA256SUMS.txt` (sha256sum format). README gained a "Release
+  verification & SmartScreen" section (unsigned build → "Run anyway";
+  `Get-FileHash -Algorithm SHA256` / `sha256sum -c` instructions).
+- **Supply chain**: `npm audit fix` + bumps (`vite` 6.4.4,
+  `vitest`/`@vitest/coverage-v8` 5.0.5, `@types/node` 26.6.5).
+  `npm audit --omit=dev` → **0 vulnerabilities**; 17 dev-only findings
+  remain with **no non-breaking upstream fix** (braces/sprintf-js/micromatch
+  chains; electron-builder suggestions require downgrades) — dev-only, not
+  shipped (`app.asar` contains no node_modules).
+
+**Tests**: new `electron/test/requestGuard.test.ts` (7 tests) + staticServer
+CSP/Host-header tests → **240/240 passing (31 files)**.
+
+### Verification for Phase 14
+- electron:compile — clean; lint — 0 errors / 1 warning; test — 240/240;
+  build — static export succeeds — DONE
+- electron:build — exit 0, fuses executed; fuse read-back from
+  `release\win-unpacked\Omivoid.exe` — all 7 applied — DONE
+- CDP smoke on the packaged exe (copied real profile): boots, 20-item
+  palette, Cycle theme action, `/stats` renders, fonts loaded, **0 console
+  errors, 0 CSP violations** — DONE
+- CDP guard check: loopback `fetch('/')` → 200; `https://example.com/` and
+  `http://neverssl.com/` fetches → blocked — DONE
+- CDP permission check: notifications → granted, camera → NotAllowedError
+  denied, geolocation → denied — DONE
+- electron:dev still launches (prerenders + "[omivoid] ready" log) — DONE
+- release:checksums → `release/SHA256SUMS.txt` written — DONE
+
+### Residual risks (accepted)
+- Unsigned build → SmartScreen warning on first run (documented +
+  published checksums).
+- The loopback renderer origin (port 41739) has no auth: another process
+  running as the same user could talk to it (inherent to local-only
+  Electron; accepted).
+- The webRequest guard's cancellation path is proven by unit tests and by
+  successful production registration, not by an end-to-end external
+  request — the CSP blocks every renderer-initiated HTTP path first.
 
 
 

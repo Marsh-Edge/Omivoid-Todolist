@@ -6,10 +6,12 @@ import {
   globalShortcut,
   nativeImage,
   nativeTheme,
+  session,
 } from "electron";
 import path from "node:path";
 import { loadWindowState, trackWindowState } from "./windowState";
 import { startStaticServer, type StaticServer } from "./staticServer";
+import { isAllowedPermission, isAllowedRequest } from "./requestGuard";
 
 /**
  * Omivoid desktop shell.
@@ -17,8 +19,11 @@ import { startStaticServer, type StaticServer } from "./staticServer";
  * - Never loads anything remote: production is served from a loopback-only
  *   static server (stable origin → reliable IndexedDB persistence), never
  *   `file://`.
- * - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`.
- * - External navigation and popups are denied.
+ * - `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`,
+ *   DevTools disabled in production.
+ * - External navigation and popups are denied; every session request that
+ *   would leave the machine is cancelled; only notification permission is
+ *   granted (needed for due-task reminders).
  * - Desktop extras: system tray (closing the window keeps the app running),
  *   a global quick-add shortcut, window size/position memory, and a
  *   single-instance lock.
@@ -69,6 +74,9 @@ async function createWindow(): Promise<BrowserWindow> {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: false,
+      // Keep the inspector available while developing the shell; in a shipped
+      // build no shortcut may open it.
+      ...(isDev ? {} : { devTools: false }),
     },
   });
 
@@ -94,6 +102,8 @@ async function createWindow(): Promise<BrowserWindow> {
 
   // The renderer must never navigate away from its own local origin.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // No <webview> is part of the app; refuse any attempt to attach one.
+  window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.webContents.on("will-navigate", (event, navigationUrl) => {
     let allowed = false;
     try {
@@ -113,9 +123,38 @@ async function createWindow(): Promise<BrowserWindow> {
   return window;
 }
 
+/**
+ * Locks the renderer session down to what the app actually needs.
+ *
+ * - Permission requests: only OS notifications (due-task reminders) are
+ *   granted; every other permission (camera, mic, geolocation, …) is denied.
+ * - Device permissions (HID/serial/USB): always denied.
+ * - In production, any request that would leave the machine is cancelled and
+ *   logged, so the "local-only" promise is enforced rather than assumed.
+ */
+function lockDownSession(): void {
+  const defaultSession = session.defaultSession;
+
+  defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(isAllowedPermission(permission));
+  });
+  defaultSession.setPermissionCheckHandler((_contents, permission) =>
+    isAllowedPermission(permission),
+  );
+  defaultSession.setDevicePermissionHandler(() => false);
+
+  if (isDev) return;
+  defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    const allowed = isAllowedRequest(details.url);
+    if (!allowed) {
+      console.error("[omivoid] blocked non-local request", details.url);
+    }
+    callback({ cancel: !allowed });
+  });
+}
+
 /** Shows and focuses the main window (restoring it first if minimized). */
-function showMainWindow(): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+function showMainWindow(): void {  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
@@ -191,6 +230,8 @@ if (!app.requestSingleInstanceLock()) {
     if (isDev) {
       console.log(`[omivoid] ${app.getName()} ready — local-only renderer.`);
     }
+
+    lockDownSession();
 
     void createWindow()
       .then((window) => {

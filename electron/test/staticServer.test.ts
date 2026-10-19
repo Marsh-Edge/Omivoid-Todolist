@@ -1,15 +1,22 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { get as httpGet } from "node:http";
+import { get as httpGet, type OutgoingHttpHeaders } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mimeFor, resolveStaticFile, startStaticServer } from "../staticServer";
+
+const INLINE_SCRIPT = 'console.log("inline-ok")';
 
 interface Response {
   status: number;
   contentType: string | undefined;
   cacheControl: string | undefined;
   nosniff: string | undefined;
+  csp: string | undefined;
+  corp: string | undefined;
+  frameOptions: string | undefined;
+  permissionsPolicy: string | undefined;
   body: string;
 }
 
@@ -20,9 +27,9 @@ describe("static server", () => {
   let server: Awaited<ReturnType<typeof startStaticServer>> | null = null;
   const base = () => `http://127.0.0.1:${port}`;
 
-  function get(pathname: string): Promise<Response> {
+  function get(pathname: string, headers: OutgoingHttpHeaders = {}): Promise<Response> {
     return new Promise((resolve, reject) => {
-      const request = httpGet(base() + pathname, (response) => {
+      const request = httpGet(base() + pathname, { headers }, (response) => {
         const chunks: Buffer[] = [];
         response.on("data", (chunk: Buffer) => chunks.push(chunk));
         response.on("end", () =>
@@ -31,6 +38,10 @@ describe("static server", () => {
             contentType: response.headers["content-type"],
             cacheControl: response.headers["cache-control"],
             nosniff: response.headers["x-content-type-options"],
+            csp: response.headers["content-security-policy"],
+            corp: response.headers["cross-origin-resource-policy"],
+            frameOptions: response.headers["x-frame-options"],
+            permissionsPolicy: response.headers["permissions-policy"],
             body: Buffer.concat(chunks).toString("utf8"),
           }),
         );
@@ -47,6 +58,11 @@ describe("static server", () => {
     writeFileSync(path.join(root, "style.css"), "body{color:red}");
     writeFileSync(path.join(root, "_next", "static", "js", "abc123.js"), "console.log(1)");
     writeFileSync(path.join(root, "nested", "page.html"), "<html>nested</html>");
+    // An HTML page with an inline script — the CSP must hash it exactly.
+    writeFileSync(
+      path.join(root, "with-inline.html"),
+      `<!doctype html><html><script>${INLINE_SCRIPT}</script>inline page</html>`,
+    );
     // A real file OUTSIDE the root — a traversal bug would serve it.
     secretPath = path.join(tmpdir(), `omivoid-secret-${Date.now()}.txt`);
     writeFileSync(secretPath, "TOP SECRET");
@@ -119,6 +135,33 @@ describe("static server", () => {
     const direct = await get(`/${encodeURIComponent(`../../${secretName}`)}`);
     expect(direct.status).toBe(404);
     expect(direct.body).not.toContain("TOP SECRET");
+  });
+
+  it("sends a strict CSP whose script-src hashes the inline scripts", async () => {
+    const response = await get("/");
+    const expectedHash = `'sha256-${createHash("sha256").update(INLINE_SCRIPT).digest("base64")}'`;
+    expect(response.csp).toBeDefined();
+    expect(response.csp).toContain("script-src 'self'");
+    expect(response.csp).toContain(expectedHash);
+    expect(response.csp).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(response.csp).toContain("object-src 'none'");
+    expect(response.csp).toContain("frame-ancestors 'none'");
+    expect(response.csp).toContain("connect-src 'self'");
+  });
+
+  it("locks down framing, cross-origin reads and device features", async () => {
+    const response = await get("/");
+    expect(response.corp).toBe("same-origin");
+    expect(response.frameOptions).toBe("DENY");
+    expect(response.permissionsPolicy).toContain("camera=()");
+    expect(response.permissionsPolicy).toContain("geolocation=()");
+  });
+
+  it("refuses requests addressed to another origin (DNS rebinding)", async () => {
+    const response = await get("/", { Host: "evil.example" });
+    expect(response.status).toBe(403);
+    expect(response.csp).toBeDefined();
+    expect(response.body).not.toContain("app shell");
   });
 
   it("closes cleanly", async () => {

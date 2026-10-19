@@ -15,7 +15,8 @@
     "seed": "node scripts/seed.mjs",
     "electron:compile": "tsc -p electron/tsconfig.json",
     "electron:dev": "next build && tsc -p electron/tsconfig.json && electron .",
-    "electron:build": "next build && tsc -p electron/tsconfig.json && electron-builder --win"
+    "electron:build": "next build && tsc -p electron/tsconfig.json && electron-builder --win",
+    "release:checksums": "node scripts/checksums.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.21",
@@ -40,11 +41,11 @@
     "@tailwindcss/turbopack": "^4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^20",
+    "@types/node": "^26.6.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^5.0.5",
     "electron": "^44.8.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
@@ -55,7 +56,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.5"
   },
   "allowScripts": {
     "unrs-resolver@1.12.2": true

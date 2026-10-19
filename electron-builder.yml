@@ -18,6 +18,19 @@ files:
 asar: true
 npmRebuild: false
 
+# Electron fuse hardening for shipped builds: no ELECTRON_RUN_AS_NODE, no
+# NODE_OPTIONS/--inspect injection, no loading code outside app.asar, and
+# asar integrity validation (Windows ≥ electron 30). The file:// extra
+# privileges fuse is off because the app never uses file://.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
 win:
   target:
     - nsis
