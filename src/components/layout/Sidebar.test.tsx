@@ -66,4 +66,23 @@ describe("Sidebar", () => {
       expect(useAppStore.getState().filters.tagIds).toEqual([tag.id]);
     });
   });
+
+  it("deletes a project when the trash button is clicked", async () => {
+    const project = await createProject({ name: "Doomed" });
+    useAppStore.setState({ selectedProjectId: project.id });
+    render(<Sidebar />);
+
+    const deleteButton = await screen.findByRole("button", {
+      name: t("deleteProjectAria", { name: "Doomed" }),
+    });
+    fireEvent.click(deleteButton);
+
+    await waitFor(async () => {
+      expect(await getProject(project.id)).toBeUndefined();
+    });
+    expect(useAppStore.getState().selectedProjectId).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: t("deleteProjectAria", { name: "Doomed" }) }),
+    ).toBeNull();
+  });
 });

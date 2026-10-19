@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import useAppStore, { type View } from "@/store/appStore";
 import { useProjects } from "@/features/projects/useProjects";
 import { useTags } from "@/features/tags/useTags";
-import { createProject } from "@/db/projectRepository";
+import { createProject, deleteProject } from "@/db/projectRepository";
 import { createTag, deleteTag } from "@/db/tagRepository";
 import { notifyError, toUserMessage } from "@/lib/errors";
 import { PROJECT_ICON_MAP } from "@/lib/projectIcons";
@@ -247,6 +247,17 @@ export function Sidebar() {
                   className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                 >
                   <Pencil className="size-3" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedProjectId === p.id) setSelectedProjectId(null);
+                    void deleteProject(p.id).catch(notifyError);
+                  }}
+                  aria-label={t("deleteProjectAria", { name: p.name })}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Trash2 className="size-3" aria-hidden="true" />
                 </button>
               </div>
             ))

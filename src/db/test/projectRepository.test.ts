@@ -7,6 +7,8 @@ import {
   listProjects,
   updateProject,
 } from "../projectRepository";
+import { createTask, getTask } from "../taskRepository";
+import { clearHistory, getHistorySnapshot, undo, redo } from "../history";
 
 describe("projectRepository", () => {
   let db: OmivoidDatabase;
@@ -60,5 +62,50 @@ describe("projectRepository", () => {
     await deleteProject(p.id);
     expect(await getProject(p.id)).toBeUndefined();
     expect(await listProjects()).toHaveLength(0);
+  });
+
+  it("unassigns the project's tasks and subtasks so they fall back to the Inbox", async () => {
+    const p = await createProject({ name: "Work" });
+    const parent = await createTask({ title: "Parent", projectId: p.id });
+    const subtask = await createTask({ title: "Subtask", parentId: parent.id });
+    const other = await createTask({ title: "Elsewhere" });
+
+    await deleteProject(p.id);
+
+    expect((await getTask(parent.id))?.projectId).toBe("");
+    expect((await getTask(subtask.id))?.projectId).toBe("");
+    expect(await getTask(parent.id)).toBeDefined();
+    expect(await getTask(subtask.id)).toBeDefined();
+    expect((await getTask(other.id))?.projectId).toBe("");
+  });
+
+  it("keeps child projects when their parent is deleted", async () => {
+    const parent = await createProject({ name: "Parent" });
+    const child = await createProject({ name: "Child", parentId: parent.id });
+
+    await deleteProject(parent.id);
+
+    const remaining = await listProjects();
+    expect(remaining.map((p) => p.id)).toEqual([child.id]);
+    expect(remaining[0]?.parentId).toBe(parent.id);
+  });
+
+  it("restores the project and its task memberships with a single undo", async () => {
+    const p = await createProject({ name: "Work" });
+    const task = await createTask({ title: "Do it", projectId: p.id });
+    clearHistory();
+
+    await deleteProject(p.id);
+    expect(await getProject(p.id)).toBeUndefined();
+    expect((await getTask(task.id))?.projectId).toBe("");
+    expect(getHistorySnapshot().canUndo).toBe(true);
+
+    await undo();
+    expect(await getProject(p.id)).toBeDefined();
+    expect((await getTask(task.id))?.projectId).toBe(p.id);
+
+    await redo();
+    expect(await getProject(p.id)).toBeUndefined();
+    expect((await getTask(task.id))?.projectId).toBe("");
   });
 });

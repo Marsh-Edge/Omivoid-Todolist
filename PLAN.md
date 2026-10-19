@@ -879,5 +879,39 @@ ErrorBoundary has no recovery path in the packaged build (no menu/devtools).
 - npm run electron:build — repackage + CDP re-verify pass — DONE
 
 
+## Phase 13 — Project deletion — complete
+
+User report: projects are permanent — they can be created but never deleted.
+
+- **Root cause**: `deleteProject` existed in the repository layer (with tests
+  and an `undoDeleteProject` history label) but **no UI ever called it** — the
+  sidebar project row only had the edit (pencil) button, while tag rows also
+  get a hover trash button.
+- **Repository (`deleteProject`, src/db/projectRepository.ts)**: deletion is
+  now safe instead of orphaning references. Within one transaction the
+  project row is removed and every task stored under that `projectId`
+  (parents and subtasks alike, index-backed query) is unassigned
+  (`projectId → ""`), which puts it back in the Inbox per `isInbox`.
+  Project + task row changes are recorded as **one** history entry, so a
+  single undo restores the project and its tasks' memberships (redo
+  re-deletes). Child projects keep their `parentId` and surface as roots via
+  the sidebar's existing `buildTree` policy ("deleting a parent must not
+  hide children").
+- **UI (src/components/layout/Sidebar.tsx)**: hover trash button on project
+  rows next to the pencil, mirroring tags — one click, no confirmation
+  (undo is the safety net, consistent with tag deletion). New i18n key
+  `deleteProjectAria: "Delete project “{name}”"`. If the deleted project was
+  selected, `selectedProjectId` is cleared so no ghost selection remains.
+- **Tests**: repository — tasks+subtasks unassigned (others untouched),
+  child survives as root, single-step undo/redo round-trip; Sidebar — button
+  renders, project removed from DB and list, selection cleared.
+
+### Verification for Phase 13
+- npm run lint — 0 errors, 1 warning only (useVirtualizer) — DONE
+- npm test — 230/230 passing (30 files, +4 new) — DONE
+- npm run build — static export succeeds — DONE
+- npm run electron:compile — clean — DONE
+
+
 
 

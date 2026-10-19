@@ -47,6 +47,7 @@ const en = {
   deleteTagAria: "Delete tag “{name}”",
   editProject: "Edit project",
   editProjectAria: "Edit project “{name}”",
+  deleteProjectAria: "Delete project “{name}”",
   editTag: "Edit tag",
   editTagAria: "Edit tag “{name}”",
   nameLabel: "Name",

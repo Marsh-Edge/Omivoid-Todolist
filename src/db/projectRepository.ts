@@ -1,6 +1,6 @@
 import { getDb } from "./index";
-import { projectSchema } from "./schemas";
-import { recordHistory, projectRow } from "./history";
+import { projectSchema, taskSchema } from "./schemas";
+import { recordHistory, projectRow, taskRow, type RowChange } from "./history";
 import type { Project } from "@/types";
 
 function now(): number {
@@ -59,13 +59,28 @@ export async function updateProject(id: string, patch: Partial<Pick<Project, "na
   });
 }
 
+/**
+ * Deletes a project and unassigns its tasks (projectId → "") so they fall
+ * back to the Inbox instead of becoming unreachable. Subtasks are covered
+ * too: every task stored under this project id is updated, regardless of
+ * hierarchy. Child projects keep their parentId; the sidebar's buildTree
+ * already surfaces them as roots ("deleting a parent must not hide children").
+ * The project row and every unassigned task are recorded as one history
+ * entry, so a single undo restores both.
+ */
 export async function deleteProject(id: string): Promise<void> {
   const db = getDb();
-  await db.transaction("rw", db.projects, async () => {
+  await db.transaction("rw", db.projects, db.tasks, async () => {
     const existing = await db.projects.get(id);
+    if (!existing) return;
+    const tasks = await db.tasks.where("projectId").equals(id).toArray();
     await db.projects.delete(id);
-    if (existing) {
-      recordHistory({ label: "undoDeleteProject", changes: [projectRow(existing, null)] });
+    const changes: RowChange[] = [projectRow(existing, null)];
+    for (const task of tasks) {
+      const next = taskSchema.parse({ ...task, projectId: "", updatedAt: now() });
+      await db.tasks.put(next);
+      changes.push(taskRow(task, next));
     }
+    recordHistory({ label: "undoDeleteProject", changes });
   });
 }
