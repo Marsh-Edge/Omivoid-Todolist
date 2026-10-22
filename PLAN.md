@@ -1017,7 +1017,7 @@ copyright holder "Edge Quantum".
   final newline — so the new Markdown/YAML files match the existing sources.
 - `package.json`: `author` → "Edge Quantum" (matches `LICENSE`), plus
   `license`, `homepage`, `repository`, `bugs`, `keywords`,
-  `engines.node >= 20.9.0` (Next 16's own minimum). `private: true` kept —
+  `engines.node >= 22.15.0` (see the Node bump below). `private: true` kept —
   this is not an npm package.
 - `electron-builder.yml`: `copyright` → "Copyright © 2026 Edge Quantum";
   `publish: null` added — electron-builder only produces artifacts, the
@@ -1041,7 +1041,7 @@ copyright holder "Edge Quantum".
 - `.github/workflows/ci.yml` — on push to `main`, on every PR and manually:
   a **quality** job (lint → typecheck → electron typecheck → tests) and a
   **build** job (static export → Electron shell compile, static export
-  uploaded as an artifact). Node 20, `npm ci` against the committed
+  uploaded as an artifact). Node 22 LTS, `npm ci` against the committed
   lockfile v3, `permissions: contents: read`.
 - `.github/workflows/release.yml` — on a `v*` tag (or manually with an
   existing tag): matrix build of the Windows NSIS installer
@@ -1097,6 +1097,27 @@ copyright holder "Edge Quantum".
   installable artifact (`*.exe`, `*.AppImage`, `*.dmg`, `*.zip`, `*.tar.gz`)
   and gained a `--dir` flag so the release workflow can checksum the
   downloaded artifacts. Output format is unchanged (`sha256sum -c`).
+
+### CI fixes found by the first release run
+The first tag push exercised the CI for real and exposed three defects that the
+local machine could not reproduce (they were all "works on my machine"):
+
+1. **Route types were missing in a clean checkout.** Next.js 16 generates the
+   global `LayoutProps` / `PageProps` types into `.next/types`, and `tsc
+   --noEmit` runs *before* `next build` in the quality job. On a fresh
+   checkout that directory does not exist, so the type check failed with
+   `TS2304: Cannot find name 'LayoutProps'`. Locally it passed only because a
+   previous build had left the generated types behind. Fixed by running
+   `next typegen` before `tsc` (`typecheck` script).
+2. **The test workers crashed on Node 20.** jsdom 30 bundles an undici that
+   calls `zlib.createZstdDecompress` — an API that only exists since Node
+   22.15 — so every fork died at import time with
+   `TypeError: Cannot read properties of undefined (reading 'bind')`.
+   The project therefore requires **Node 22.15+** now: `engines.node`,
+   both workflows and the docs were bumped from Node 20 to Node 22 LTS.
+   (The Electron 44 toolchain wants Node >= 22.12 anyway.)
+3. **npm 12 blocked dependency install scripts.** See the `allowScripts`
+   note above.
 
 ### Verification for Phase 15
 - lint — 0 errors / 1 known warning (unchanged) — DONE
