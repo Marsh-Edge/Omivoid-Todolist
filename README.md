@@ -1,14 +1,62 @@
 # Omivoid
 
-A local-first todo / task manager. Everything is stored on your device in IndexedDB — there are **no network requests, no accounts, and no telemetry**, ever (not even fonts or icons; they are bundled locally). Ships as a web static export and as a desktop app (Electron).
+[![CI](https://github.com/Marsh-Edge/Omivoid-Todolist/actions/workflows/ci.yml/badge.svg)](https://github.com/Marsh-Edge/Omivoid-Todolist/actions/workflows/ci.yml) · [MIT License](LICENSE) · [Latest release](https://github.com/Marsh-Edge/Omivoid-Todolist/releases/latest) · [Report a bug](https://github.com/Marsh-Edge/Omivoid-Todolist/issues/new/choose) · [Security policy](SECURITY.md)
 
-## Stack
+**A local-first todo / task manager.** Everything is stored on your device in
+IndexedDB — there are **no network requests, no accounts, and no telemetry**,
+ever (not even fonts or icons; they are bundled locally). Ships as a web
+static export and as a desktop app (Electron).
 
-- **Next.js 16** with `output: 'export'` (static, client-only; no API routes/SSR)
-- **Dexie / IndexedDB** for storage, with **Zod**-validated repositories
-- **Zustand** (selector-based) for UI state
-- **Tailwind v4** + shadcn/ui, **lucide-react**, **Space Grotesk** (all bundled locally)
-- **Electron** shell with `contextIsolation`, `sandbox`, and a loopback-only static server
+> Your tasks never leave your machine. Not for analytics, not for sync, not for
+> "improvements". There is no server component to leak them to.
+
+## Screenshots
+
+| List | Kanban board |
+| :---: | :---: |
+| <img src="docs/screenshots/list.png" alt="Omivoid list view" width="470"> | <img src="docs/screenshots/board.png" alt="Omivoid Kanban board" width="470"> |
+
+| Month calendar | Command palette |
+| :---: | :---: |
+| <img src="docs/screenshots/calendar.png" alt="Omivoid month calendar" width="470"> | <img src="docs/screenshots/command-palette.png" alt="Omivoid command palette" width="470"> |
+
+| Statistics | Dark theme |
+| :---: | :---: |
+| <img src="docs/screenshots/stats.png" alt="Omivoid statistics page" width="470"> | <img src="docs/screenshots/list-dark.png" alt="Omivoid in dark mode" width="470"> |
+
+<sub>
+Captured from the static export with <code>npm run screenshots</code>, using
+synthetic seed data.
+</sub>
+
+## Download
+
+Get the latest build from the
+[releases page](https://github.com/Marsh-Edge/Omivoid-Todolist/releases/latest).
+
+| Platform | Asset | Notes |
+| --- | --- | --- |
+| Windows | `Omivoid-<version>-setup.exe` | NSIS installer, installs per user by default |
+| Linux | `Omivoid-<version>.AppImage` | `chmod +x` the file, then run it |
+
+The release builds are **unsigned**, so Windows SmartScreen may show
+"Windows protected your PC" on the first run — choose **More info → Run
+anyway**. Verify the download with the published checksums instead:
+
+```bash
+# Linux
+sha256sum -c SHA256SUMS.txt
+
+# Windows PowerShell
+Get-FileHash .\Omivoid-<version>-setup.exe -Algorithm SHA256
+```
+
+Compare the digest with the matching line in `SHA256SUMS.txt` from the same
+release. See [Release verification](#release-verification--smartscreen) for
+details.
+
+Prefer to run it in a browser? The web build is a plain static export — see
+[Run the web build locally](#run-the-web-build-locally).
 
 ## Features
 
@@ -29,12 +77,18 @@ A local-first todo / task manager. Everything is stored on your device in Indexe
 - Desktop extras: **system tray** (closing the window keeps the app running), **global quick-add** (`Ctrl/Cmd+Alt+N`), window size/position memory, and a single-instance lock
 - Accessibility: skip-to-content link, focus-managed detail panel, keyboard status moves on the board, `prefers-reduced-motion` support
 
-See `PLAN.md` for phase status (Phases 1–5 done) and `AGENTS.md` for the permanent project rules.
+## Stack
+
+- **Next.js 16** with `output: 'export'` (static, client-only; no API routes/SSR)
+- **Dexie / IndexedDB** for storage, with **Zod**-validated repositories
+- **Zustand** (selector-based) for UI state
+- **Tailwind v4** + shadcn/ui, **lucide-react**, **Space Grotesk** (all bundled locally)
+- **Electron** shell with `contextIsolation`, `sandbox`, and a loopback-only static server
 
 ## Requirements
 
-- Node.js 20+
-- Windows (NSIS) or Linux (AppImage) for packaging
+- Node.js 20.9+ (for development)
+- Windows (NSIS) or Linux (AppImage) for packaging the desktop app
 
 On Windows PowerShell, the execution policy may block `npm.ps1` — invoke
 `npm.cmd` / `npx.cmd` instead.
@@ -53,13 +107,29 @@ npm run test            # Vitest (fake-indexeddb for the DB layer)
 npm run test:watch
 npm run test:coverage   # informational, no threshold gate
 npm run lint
+npm run typecheck       # tsc --noEmit for the renderer code
+npm run verify          # lint + typecheck + test
 ```
 
 ## Build (web static export)
 
 ```bash
 npm run build      # emits ./out
+npm run serve      # serves ./out at http://127.0.0.1:3000 (loopback only)
 ```
+
+## Run the web build locally
+
+The static export is a normal web app — it runs from any static file server:
+
+```bash
+npm run build
+npm run serve      # → http://127.0.0.1:3000
+```
+
+Your data is stored in the browser profile's IndexedDB, so it stays on the
+machine that opened it. `npm run serve` mirrors the desktop app's loopback-only
+server and never accepts connections from the network.
 
 ## Sample data (seed)
 
@@ -103,9 +173,8 @@ focuses the quick-add box from anywhere.
 ### Packaging
 
 ```bash
-npm run electron:build        # Windows → release/Omivoid-<version>-setup.exe
-npx electron-builder --linux  # Linux  → release/Omivoid-<version>.AppImage
-                              # (run `npm run build && npm run electron:compile` first)
+npm run electron:build:win     # Windows → release/Omivoid-<version>-setup.exe
+npm run electron:build:linux   # Linux   → release/Omivoid-<version>.AppImage
 ```
 
 Notes:
@@ -133,14 +202,48 @@ loopback static server, Electron fuses (ASAR integrity, `RunAsNode` off, etc.),
 DevTools disabled, permission lockdown (notifications only), a non-loopback
 request guard, and no external network access of any kind.
 
+## Project status
+
+All planned phases (1–14) are complete — see [`PLAN.md`](PLAN.md) for the
+detailed history and [`AGENTS.md`](AGENTS.md) for the permanent project rules.
+The current release is **v0.1.0**; see the
+[changelog](CHANGELOG.md) for what it contains.
+
+## Contributing
+
+Pull requests are welcome — please read
+[`CONTRIBUTING.md`](CONTRIBUTING.md) first. The short version: the app stays
+local-only, TypeScript is strict without `any`, everything that reaches
+IndexedDB is validated with Zod, and `npm run verify` plus `npm run build`
+must pass before a change is merged.
+
+Screenshots in this README are generated with:
+
+```bash
+npm run build
+npm run seed
+npm run serve          # in one terminal
+npm run screenshots    # in another
+```
+
+## Security
+
+Please report vulnerabilities privately — see
+[`SECURITY.md`](SECURITY.md). Never paste database contents or exported
+backups into a public issue.
+
 ## Architecture pointers
 
 | Area | Where |
 | --- | --- |
-| Database schema + migrations (Dexie v1–v6) | `src/db/` |
+| Database schema + migrations (Dexie v1–v7) | `src/db/` |
 | Repository layer (only code that touches Dexie; Zod-validated) | `src/db/*Repository.ts` |
 | Pure logic (filters, recurrence, NL parsing, stats, …) | `src/lib/` |
 | Features (tasks, board, calendar, notes, stats, …) | `src/features/` |
 | Electron main process + window state | `electron/` |
 | Phase-by-phase development plan | `PLAN.md` |
 | Permanent project rules | `AGENTS.md` |
+
+## License
+
+[MIT](LICENSE) © 2026 Edge Quantum
