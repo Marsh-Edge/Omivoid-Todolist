@@ -1024,6 +1024,18 @@ copyright holder "Edge Quantum".
   release workflow publishes them.
 - New scripts: `typecheck`, `electron:typecheck`, `verify`, `serve`,
   `screenshots`, `electron:build:win`, `electron:build:linux`.
+- `allowScripts` policy completed: npm 12 only runs a dependency's install
+  lifecycle scripts when the package is covered by the project's policy, so
+  `esbuild` and `electron-winstaller` were added next to `unrs-resolver`
+  (version-pinned, matching npm's `allow-scripts-pin` default).
+  `npm approve-scripts --allow-scripts-pending` now reports
+  "No packages with unreviewed install scripts".
+- Electron 44 dropped its `postinstall` download — the `electron` CLI now
+  fetches the runtime lazily on first use. Therefore no `allowScripts` entry
+  is needed for electron, and the CI workflows no longer set the (now
+  unused) `ELECTRON_SKIP_BINARY_DOWNLOAD` flag. `CONTRIBUTING.md` and the
+  README document the one-time ~100 MB download on the first
+  `npm run electron:dev`.
 
 ### GitHub automation
 - `.github/workflows/ci.yml` — on push to `main`, on every PR and manually:

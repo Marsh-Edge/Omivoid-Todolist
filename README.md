@@ -166,6 +166,10 @@ it; use `npm run dev` for fast web iteration. In production the renderer is
 served from `http://127.0.0.1:41739` (a fixed loopback origin) so IndexedDB
 persistence survives restarts.
 
+Electron 44 fetches its runtime on first use instead of during `npm install`,
+so the very first `npm run electron:dev` downloads it (~100 MB, once). The web
+build never needs it.
+
 Closing the window hides Omivoid to the system tray rather than quitting; use
 the tray menu's **Quit Omivoid** (or the app menu) to exit. `Ctrl/Cmd+Alt+N`
 focuses the quick-add box from anywhere.
