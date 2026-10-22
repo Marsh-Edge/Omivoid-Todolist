@@ -32,6 +32,7 @@ Rules are permanent and live in `AGENTS.md`. Work phase by phase; **STOP for app
 - [x] **Phase 12** — Command palette crash fix (cmdk provider + ErrorBoundary reload) — **DONE**
 - [x] **Phase 13** — Project deletion from the sidebar (cascade to Inbox + undo) — **DONE**
 - [x] **Phase 14** — Security hardening for release (CSP, fuses, permission lockdown, checksums) — **DONE**
+- [x] **Phase 15** — GitHub release preparation (CI + release workflows, community docs, README, screenshots, v0.1.0) — **DONE**
 
 ## Phase 1 — Foundation + Electron proof
 
@@ -1000,6 +1001,115 @@ CSP/Host-header tests → **240/240 passing (31 files)**.
 - The webRequest guard's cancellation path is proven by unit tests and by
   successful production registration, not by an end-to-end external
   request — the CSP blocks every renderer-initiated HTTP path first.
+
+## Phase 15 - GitHub release preparation - complete
+
+Goal: turn the working tree into a published, maintainable GitHub project and
+ship **v0.1.0** as the first public release. Scope decided with the maintainer:
+full release kit, v0.1.0, Windows + Linux, **no** GitHub Pages (desktop-first),
+copyright holder "Edge Quantum".
+
+### Repository hygiene
+- `.gitignore`: added `/.vscode/`, `/.idea/`, `*.swp`, `*.log`, `.eslintcache`,
+  `Thumbs.db` (the existing `.next/`, `out/`, `release/`, `electron/out/`,
+  `*.tsbuildinfo` entries were kept).
+- `.editorconfig`: UTF-8, LF, 2-space indent, trim trailing whitespace,
+  final newline — so the new Markdown/YAML files match the existing sources.
+- `package.json`: `author` → "Edge Quantum" (matches `LICENSE`), plus
+  `license`, `homepage`, `repository`, `bugs`, `keywords`,
+  `engines.node >= 20.9.0` (Next 16's own minimum). `private: true` kept —
+  this is not an npm package.
+- `electron-builder.yml`: `copyright` → "Copyright © 2026 Edge Quantum";
+  `publish: null` added — electron-builder only produces artifacts, the
+  release workflow publishes them.
+- New scripts: `typecheck`, `electron:typecheck`, `verify`, `serve`,
+  `screenshots`, `electron:build:win`, `electron:build:linux`.
+
+### GitHub automation
+- `.github/workflows/ci.yml` — on push to `main`, on every PR and manually:
+  a **quality** job (lint → typecheck → electron typecheck → tests) and a
+  **build** job (static export → Electron shell compile, static export
+  uploaded as an artifact). Node 20, `npm ci` against the committed
+  lockfile v3, `permissions: contents: read`.
+- `.github/workflows/release.yml` — on a `v*` tag (or manually with an
+  existing tag): matrix build of the Windows NSIS installer
+  (`windows-latest`) and the Linux AppImage (`ubuntu-latest`), artifacts
+  merged, `scripts/checksums.mjs` run over them, then `gh release create`
+  with `--generate-notes` (an existing release is updated with
+  `--clobber` instead). `permissions: contents: write`.
+- `.github/dependabot.yml` — weekly `npm` + `github-actions` updates.
+- `.github/ISSUE_TEMPLATE/{bug_report,feature_request}.yml` +
+  `config.yml` (private reporting and discussions are linked, blank issues
+  disabled) and `.github/pull_request_template.md` with the project-rule
+  checklist.
+- No third-party GitHub Action is used: `gh` is preinstalled on the runners,
+  so the release job has no supply-chain surface beyond `actions/*`.
+
+### Community & policy documents
+- `CONTRIBUTING.md` — setup, the full command table, the permanent project
+  rules (locality, performance, code quality), branch/commit conventions,
+  the Dexie "append a version, never edit one" rule, and the required
+  pre-merge checks.
+- `SECURITY.md` — threat model (the local machine), private reporting via
+  GitHub Security Advisories, response windows, the hardening that is already
+  shipped, and an explicit "out of scope" list (unencrypted IndexedDB,
+  unauthenticated loopback origin, unsigned binaries).
+- `CODE_OF_CONDUCT.md` — Contributor Covenant 2.1.
+- `CHANGELOG.md` — Keep a Changelog format; a full v0.1.0 entry.
+
+### README & screenshots
+- README rewritten: GitHub-hosted CI badge (no shields.io, to stay consistent
+  with the no-external-requests rule), download table, checksum
+  verification, screenshots, "run the web build locally", project status,
+  contributing/security sections, and the stale "Phases 1–5 done" line
+  corrected to Phases 1–14 (the Dexie version range was also corrected from
+  v1–v6 to v1–v7).
+- `docs/screenshots/*.png` — six 1440×900 captures (list, board, calendar,
+  command palette, statistics, dark theme).
+- `scripts/serve.mjs` — dependency-free loopback static server for the
+  export (preview + screenshot source). Serves only files inside `out/`,
+  with a path-traversal guard.
+- `scripts/screenshots.mjs` — reproducible capture script. It drives a
+  locally installed Chromium over the DevTools Protocol (**no npm
+  dependency**), launches it with `--host-resolver-rules=MAP * ~NOTFOUND` so
+  nothing but the loopback preview server is reachable, imports the seed
+  through the app's **own** Zod-validated JSON import path, and asserts the
+  expected view is on screen before writing each file — a broken view can
+  never produce a misleading README image.
+- `scripts/seed.mjs` — task titles now read like real tasks ("Draft the
+  report") instead of carrying a "#42" counter suffix; the verb/noun pairing
+  uses a coprime stride so consecutive tasks never look like a numbered list.
+
+### Release tooling
+- `scripts/checksums.mjs` — generalized from `*-setup.exe` to any
+  installable artifact (`*.exe`, `*.AppImage`, `*.dmg`, `*.zip`, `*.tar.gz`)
+  and gained a `--dir` flag so the release workflow can checksum the
+  downloaded artifacts. Output format is unchanged (`sha256sum -c`).
+
+### Verification for Phase 15
+- lint — 0 errors / 1 known warning (unchanged) — DONE
+- typecheck (renderer) — clean — DONE
+- typecheck (Electron shell) — clean — DONE
+- test — **240/240 passing (31 files)** — DONE
+- build — static export succeeds — DONE
+- electron:compile — clean — DONE
+- `scripts/checksums.mjs` — writes `SHA256SUMS.txt` for both the `.exe` and
+  the `.AppImage` — DONE
+- `scripts/screenshots.mjs` — 6/6 screenshots written, every view asserted —
+  DONE
+- `npm run verify` (lint + typecheck + test) — green — DONE
+
+### Residual risks (accepted)
+- The release workflow has never run on the runners yet: the first tag push
+  is the first real exercise of the electron-builder + AppImage path in CI.
+  The local Windows packaging path is proven (Phase 14), the Linux AppImage
+  path is the untested one — contingency: `--linux tar.gz`.
+- Release binaries stay unsigned (no certificate); checksums remain the
+  integrity story.
+- The board's "Done" column is always empty in an active view, because
+  completed tasks only live in the *Completed* view (by design, see
+  `src/lib/viewPredicates.ts`). The board screenshot shows this honestly
+  rather than hiding it.
 
 
 
