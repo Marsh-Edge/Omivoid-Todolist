@@ -39,8 +39,50 @@ const PRESET_COLORS = [
 ];
 
 const PRIORITIES = ["none", "low", "medium", "high"];
-const VERBS = ["Draft", "Review", "Ship", "Plan", "Fix", "Research", "Write", "Call", "Email", "Test"];
-const NOUNS = ["the report", "the launch", "the design", "the budget", "the roadmap", "the release", "the docs", "the migration", "the session", "the invoice"];
+const VERBS = [
+  "Draft",
+  "Review",
+  "Ship",
+  "Plan",
+  "Fix",
+  "Research",
+  "Write",
+  "Call",
+  "Email",
+  "Test",
+  "Prepare",
+  "Book",
+  "Update",
+  "Send",
+  "Migrate",
+];
+const NOUNS = [
+  "the report",
+  "the launch",
+  "the design",
+  "the budget",
+  "the roadmap",
+  "the release notes",
+  "the docs",
+  "the migration",
+  "the session",
+  "the invoice",
+  "the onboarding flow",
+  "the sprint board",
+  "the changelog",
+  "the retro notes",
+  "the support inbox",
+];
+
+/**
+ * Builds a readable, varied task title. The verb and the noun are picked with
+ * a coprime stride so consecutive tasks never read like a numbered list.
+ */
+function buildTitle(i) {
+  const verb = VERBS[i % VERBS.length];
+  const noun = NOUNS[(i * 7 + Math.floor(i / NOUNS.length)) % NOUNS.length];
+  return `${verb} ${noun}`;
+}
 
 function parseArgs(argv) {
   const options = { count: 100, out: "omivoid-seed.json" };
@@ -119,10 +161,11 @@ function buildTasks(count, projects, tags, now) {
       .map((tag) => tag.id);
 
     const createdAt = base + i * HOUR;
+    const title = buildTitle(i);
     tasks.push({
       id: randomUUID(),
-      title: `${VERBS[i % VERBS.length]} ${NOUNS[i % NOUNS.length]} #${i + 1}`,
-      notes: i % 6 === 0 ? `Notes for **task ${i + 1}**.\n\n- first point\n- second point` : "",
+      title,
+      notes: i % 6 === 0 ? `Notes for **${title}**.\n\n- first point\n- second point` : "",
       status,
       priority: PRIORITIES[i % PRIORITIES.length],
       projectId: isSubtask ? "" : i % 4 === 0 ? "" : projects[i % projects.length].id,
