@@ -1,0 +1,18 @@
+# Normalize line endings to LF in the repository. The working tree keeps the
+# platform convention (autocrlf), so nothing changes for existing contributors.
+* text=auto
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.exe binary
+*.AppImage binary
+
+# Lockfiles and generated metadata stay untouched.
+package-lock.json -diff
