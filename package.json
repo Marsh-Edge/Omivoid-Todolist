@@ -32,7 +32,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -89,6 +89,8 @@
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "unrs-resolver@1.12.2": true
+    "unrs-resolver@1.12.2": true,
+    "esbuild@0.25.12": true,
+    "electron-winstaller@5.4.0": true
   }
 }
