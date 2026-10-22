@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in Omivoid does not work as expected
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this!
+
+        Omivoid stores everything locally, so please **never** paste database
+        contents, exported backups or personal task data into an issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened?
+      placeholder: I clicked "Complete" and the task disappeared from the list.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: A minimal, numbered list of steps.
+      placeholder: |
+        1. Open the Kanban board
+        2. Drag a card to "Done"
+        3. Switch back to the list view
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: >
+        Relevant messages from the developer console (Help → Toggle Developer
+        Tools → Console). Remove anything that contains personal data.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version shown in the app title bar or the release you downloaded.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows (installer)
+        - Linux (AppImage)
+        - Web build (local static export)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser / Electron version
+      description: Only relevant for the web build.
+      options:
+        - Electron (desktop app)
+        - Chrome
+        - Firefox
+        - Safari
+        - Other
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and this has not been reported yet.
+          required: true
+        - label: I did not include any personal data in this report.
+          required: true

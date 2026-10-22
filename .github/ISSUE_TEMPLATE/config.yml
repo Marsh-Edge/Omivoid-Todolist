@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Marsh-Edge/Omivoid-Todolist/security/advisories/new
+    about: Please report vulnerabilities privately instead of opening a public issue.
+  - name: Question or discussion
+    url: https://github.com/Marsh-Edge/Omivoid-Todolist/discussions
+    about: Ask usage questions and share ideas that are not yet concrete features.

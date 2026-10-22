@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you are in, not the solution you have in mind.
+      placeholder: I want to see which tasks are overdue in the calendar view.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should the app do differently?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Optional.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This feature keeps the app local-only (no network, no accounts, no telemetry).
+          required: true
+        - label: I searched the existing issues for a similar request.
+          required: true

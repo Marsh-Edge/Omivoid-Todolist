@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the previous run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    env:
+      # The Electron binary is only needed for packaging, not for linting,
+      # type-checking or the unit tests — skip the ~100 MB download here.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (renderer)
+        run: npm run typecheck
+
+      - name: Typecheck (Electron shell)
+        run: npm run electron:typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+  build:
+    name: Static export & Electron shell
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Compile Electron shell
+        run: npm run electron:compile
+
+      - name: Upload static export
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-export
+          path: out/
+          retention-days: 7
+          if-no-files-found: error
