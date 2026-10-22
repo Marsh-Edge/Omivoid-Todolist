@@ -3,19 +3,49 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first Todo / task-management app (Next.js static export + Dexie + Electron).",
-  "author": "Omivoid",
+  "license": "MIT",
+  "author": "Edge Quantum",
+  "homepage": "https://github.com/Marsh-Edge/Omivoid-Todolist#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Marsh-Edge/Omivoid-Todolist.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Marsh-Edge/Omivoid-Todolist/issues"
+  },
+  "keywords": [
+    "todo",
+    "task-manager",
+    "local-first",
+    "offline-first",
+    "privacy",
+    "productivity",
+    "electron",
+    "nextjs",
+    "dexie"
+  ],
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "main": "electron/out/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "verify": "npm run lint && npm run typecheck && npm run test",
     "seed": "node scripts/seed.mjs",
+    "serve": "node scripts/serve.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:typecheck": "tsc -p electron/tsconfig.json --noEmit",
     "electron:dev": "next build && tsc -p electron/tsconfig.json && electron .",
     "electron:build": "next build && tsc -p electron/tsconfig.json && electron-builder --win",
+    "electron:build:win": "next build && tsc -p electron/tsconfig.json && electron-builder --win --publish never",
+    "electron:build:linux": "next build && tsc -p electron/tsconfig.json && electron-builder --linux AppImage --publish never",
     "release:checksums": "node scripts/checksums.mjs"
   },
   "dependencies": {

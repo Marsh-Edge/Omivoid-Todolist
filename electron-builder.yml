@@ -1,6 +1,11 @@
 appId: com.omivoid.todolist
 productName: Omivoid
-copyright: Copyright © 2026 Omivoid
+copyright: Copyright © 2026 Edge Quantum
+
+# Releases are published by the GitHub Actions release workflow (`gh release
+# create`), never by electron-builder itself — the builder only produces
+# artifacts here.
+publish: null
 
 directories:
   output: release

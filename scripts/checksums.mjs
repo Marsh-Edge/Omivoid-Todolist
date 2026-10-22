@@ -4,18 +4,42 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Publishes SHA-256 checksums for the release installers so a download can be
+ * Publishes SHA-256 checksums for the release artifacts so a download can be
  * verified independently of the (currently unsigned) binary.
  *
- * Usage: npm run release:checksums  →  release/SHA256SUMS.txt
+ * Usage:
+ *   npm run release:checksums            → release/SHA256SUMS.txt
+ *   npm run release:checksums -- --dir X → reads/writes inside X
+ *
+ * The output uses the `sha256sum` file format ("<digest>  <name>"), so it can
+ * be verified with `sha256sum -c SHA256SUMS.txt` on Linux/macOS and with
+ * `Get-FileHash` on Windows.
  */
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const releaseDir = path.join(repoRoot, "release");
 
-const installers = readdirSync(releaseDir).filter((name) => /^.*setup\.exe$/i.test(name));
+/** Installable artifacts worth publishing. Blockmaps and debug logs are not. */
+const ARTIFACT_PATTERN = /\.(exe|AppImage|dmg|zip|tar\.gz)$/i;
+
+function parseArgs(argv) {
+  const args = { dir: path.join(repoRoot, "release") };
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--dir" && argv[i + 1]) {
+      args.dir = path.resolve(process.cwd(), argv[i + 1]);
+      i += 1;
+    }
+  }
+  return args;
+}
+
+const { dir: releaseDir } = parseArgs(process.argv.slice(2));
+
+const installers = readdirSync(releaseDir).filter((name) => ARTIFACT_PATTERN.test(name));
 if (installers.length === 0) {
-  console.error("No *-setup.exe artifacts found in release/ — run npm run electron:build first.");
+  console.error(
+    `No release artifacts found in ${path.relative(repoRoot, releaseDir) || "."} — ` +
+      "run npm run electron:build (or the release workflow) first.",
+  );
   process.exit(1);
 }
 
