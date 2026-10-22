@@ -21,7 +21,8 @@ npm run dev            # web dev server with HMR at http://localhost:3000
 
 Requirements:
 
-- **Node.js 20.9+** (this is the minimum Next.js 16 accepts)
+- **Node.js 22.15+** (Node 22 LTS — the Electron 44 toolchain requires
+  Node >= 22.12, and the test stack needs Node >= 22.15)
 - npm 10+
 - Windows or Linux for packaging the desktop app
 

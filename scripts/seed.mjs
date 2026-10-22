@@ -7,7 +7,7 @@
  * means the data flows through the *same* Zod-validated import path the user
  * already has — no schema drift is possible.
  *
- * Usage (Node 20+):
+ * Usage (Node 22+):
  *   node scripts/seed.mjs                 # 100 tasks (default)
  *   node scripts/seed.mjs --count 1000    # 1000 tasks
  *   node scripts/seed.mjs --out my.json
