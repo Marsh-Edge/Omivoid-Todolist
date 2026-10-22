@@ -28,6 +28,21 @@ Requirements:
 > On Windows PowerShell the execution policy may block `npm.ps1` — invoke
 > `npm.cmd` / `npx.cmd` instead.
 
+### Install scripts and npm 12+
+
+npm 12 only runs a dependency's install lifecycle scripts when the package is
+covered by the project's `allowScripts` policy in `package.json`. The approved
+packages are `unrs-resolver`, `esbuild` and `electron-winstaller`; check with:
+
+```bash
+npm approve-scripts --allow-scripts-pending   # lists anything still blocked
+```
+
+Electron 44 does **not** download its runtime in a `postinstall` script — the
+`electron` CLI fetches it on first use. So the first `npm run electron:dev`
+after a fresh install downloads the runtime (~100 MB, once). The web build
+(`npm run dev` / `npm run build`) never needs it.
+
 ## Commands
 
 | Command | What it does |
