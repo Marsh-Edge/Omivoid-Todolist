@@ -1132,17 +1132,54 @@ local machine could not reproduce (they were all "works on my machine"):
   DONE
 - `npm run verify` (lint + typecheck + test) — green — DONE
 
+### Release v0.1.0 — published
+Tag `v0.1.0` → commit `3621247`. The tag-triggered workflow built both
+installers and the release was published as
+<https://github.com/Marsh-Edge/Omivoid-Todolist/releases/tag/v0.1.0>:
+
+| Asset | Size |
+| --- | --- |
+| `Omivoid-0.1.0-setup.exe` (Windows, NSIS) | 115.3 MB |
+| `Omivoid-0.1.0-setup.exe.blockmap` | 0.12 MB |
+| `Omivoid-0.1.0.AppImage` (Linux) | 120.0 MB |
+| `SHA256SUMS.txt` | 2 lines |
+
+The release body was replaced with the `CHANGELOG.md` entry plus download and
+verification notes (the auto-generated body was a list of every commit).
+
+**End-to-end verification of the published artifacts:**
+- Both assets were downloaded from the release and their SHA-256 digests match
+  the published `SHA256SUMS.txt` exactly.
+- The published Windows installer was run silently into a scratch directory; the
+  installed app started and served the renderer from the loopback origin
+  `http://127.0.0.1:41739` (HTTP 200, the real app shell). The scratch
+  installation was removed afterwards.
+- The Linux AppImage was built by CI for the first time — the previously
+  untested path now works, so the `--linux tar.gz` contingency was not needed.
+
+### Post-release housekeeping
+- CI on `main` is green after the Node 22 fix (see the CI fixes section).
+- Dependabot's green PRs for `cn`, `lucide-react` and `electron` were merged.
+  The four **major** GitHub Actions bumps (`checkout`, `setup-node`,
+  `upload-artifact`, `download-artifact`) are deliberately left open: they
+  carry the release workflow, and `download-artifact --merge-multiple` /
+  `upload-artifact` with several path patterns are not covered by the CI
+  workflow. They will be taken together with a re-run of the release workflow.
+- `react-dom` and `vite` are left open because `npm ci` fails on them
+  (ERESOLVE: `react-dom@19.3.1` needs `react@19.3.1`; `vitest@5` peers on
+  `vite@^6`). Each PR carries a comment explaining why.
+
 ### Residual risks (accepted)
-- The release workflow has never run on the runners yet: the first tag push
-  is the first real exercise of the electron-builder + AppImage path in CI.
-  The local Windows packaging path is proven (Phase 14), the Linux AppImage
-  path is the untested one — contingency: `--linux tar.gz`.
 - Release binaries stay unsigned (no certificate); checksums remain the
   integrity story.
 - The board's "Done" column is always empty in an active view, because
   completed tasks only live in the *Completed* view (by design, see
   `src/lib/viewPredicates.ts`). The board screenshot shows this honestly
   rather than hiding it.
+- The `v0.1.0` tag predates the Node 22 bump, so the copy of
+  `CONTRIBUTING.md` inside the tag still mentions Node 20. The tagged app
+  itself is unaffected — it needs Node 22.15+ to run the test suite, and
+  `engines.node` on `main` now says so.
 
 
 
