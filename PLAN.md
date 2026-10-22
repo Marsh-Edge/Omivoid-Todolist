@@ -1180,6 +1180,11 @@ verification notes (the auto-generated body was a list of every commit).
   `CONTRIBUTING.md` inside the tag still mentions Node 20. The tagged app
   itself is unaffected — it needs Node 22.15+ to run the test suite, and
   `engines.node` on `main` now says so.
+- The repository briefly fell back to **private** after the release was
+  published (GitHub side, cause unknown — no secret was ever pushed and the
+  account holds ten other public repositories). It was set back to public via
+  the API and verified anonymously afterwards. Worth re-checking the
+  visibility if the repository ever looks empty to a visitor.
 
 
 
