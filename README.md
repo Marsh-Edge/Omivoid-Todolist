@@ -87,7 +87,7 @@ Prefer to run it in a browser? The web build is a plain static export — see
 
 ## Requirements
 
-- Node.js 20.9+ (for development)
+- Node.js 22.15+ (for development)
 - Windows (NSIS) or Linux (AppImage) for packaging the desktop app
 
 On Windows PowerShell, the execution policy may block `npm.ps1` — invoke
